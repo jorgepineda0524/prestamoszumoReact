@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus,TrendingUp, RefreshCw, Receipt } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import ClientForm from './ClientForm';
+import Swal from 'sweetalert2';
 
 const LoanAdminApp = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -18,6 +20,8 @@ const LoanAdminApp = () => {
     fecha_pago: new Date().toISOString().split('T')[0],
   });
   const [activeLoansList, setActiveLoansList] = useState([]);
+  const [showClientForm, setShowClientForm] = useState(false); 
+  const [clientToEdit, setClientToEdit] = useState(null);
   
   const [formData, setFormData] = useState({
     nombre: '',
@@ -73,17 +77,22 @@ const LoanAdminApp = () => {
   };
 
   const fetchClients = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setClients(data || []);
-    } catch (error) {
-      console.error('Error cargando clientes:', error);
-    }
+      setLoading(true);
+      try {
+          const { data, error } = await supabase
+              .from('clientes')
+              .select('*')
+              .eq('estado', true) 
+              .order('nombre', { ascending: true });
+
+          if (error) throw error;
+          setClients(data || []);
+          
+      } catch (error) {
+          // ...
+      } finally {
+          setLoading(false);
+      }
   };
 
   const fetchLoans = async () => {
@@ -107,10 +116,62 @@ const LoanAdminApp = () => {
       setActiveLoansList(active);
     } catch (error) {
       console.error('Error cargando préstamos:', error);
-      alert('Error al cargar préstamos: ' + error.message);
+      Swal.fire({ title: 'Error', text: 'Error al cargar préstamos: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditClient = (client) => {
+      setClientToEdit(client);
+      setShowClientForm(true);
+  };
+
+  const handleSaveClient = (newOrUpdatedClient) => {
+      fetchClients(); 
+      setClientToEdit(null); 
+  };
+
+  const handleDeleteClient = (clientId) => {
+        Swal.fire({
+            title: '¿Desactivar Cliente?',
+            html: 'Se marcará este cliente como inactivo. Sus datos históricos se mantendrán.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, Desactivar',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true,
+            customClass: {
+                popup: 'rounded-xl shadow-2xl', 
+                confirmButton: 'font-semibold px-4 py-2',
+                cancelButton: 'font-semibold px-4 py-2'
+            }
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    const { error } = await supabase
+                        .from('clientes')
+                        .update({ estado: false }) 
+                        .eq('id', clientId);
+
+                    if (error) throw error;
+                    
+                    Swal.fire({
+                        title: '¡Desactivado!',
+                        text: 'El cliente ha sido marcado como inactivo.',
+                        icon: 'success',
+                        confirmButtonColor: '#10b981',
+                    });
+                    
+                    fetchClients();
+                } catch (error) {
+                    console.error('Error al desactivar cliente:', error);
+                    Swal.fire('Error', `Ocurrió un error al desactivar: ${error.message}`, 'error');
+                }
+            }
+        });
   };
 
   const handleUpdateCapital = async (newAmount) => {
@@ -146,11 +207,11 @@ const LoanAdminApp = () => {
           }
 
           setTotalCapital(newAmount);
-          alert('Capital total actualizado exitosamente.');
+          Swal.fire({ title: 'Éxito', text: 'Capital total actualizado exitosamente.', icon: 'success', timer: 4000, showConfirmButton: false })
 
       } catch (error) {
         console.error('Error al actualizar/insertar capital invertido:', error);
-        alert('Error al guardar el capital: ' + error.message);
+        Swal.fire({ title: 'Error', text: 'Error al guardar el capital: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
       } finally {
           setSettingsLoading(false); 
       }
@@ -215,7 +276,7 @@ const handlePaymentInputChange = (e) => {
       const monto = parseFloat(monto_pago);
 
       if (!loan_id || monto <= 0 || !fecha_pago) {
-          alert('Por favor selecciona un préstamo e ingresa un monto válido.');
+          Swal.fire({ title: 'Error', text: 'Por favor selecciona un préstamo e ingresa un monto válido.', icon: 'error', confirmButtonText: 'Entendido' })
           return;
       }
 
@@ -224,12 +285,12 @@ const handlePaymentInputChange = (e) => {
           const selectedLoan = loans.find(l => l.id.toString() === loan_id.toString());
 
           if (!selectedLoan) {
-              alert('Préstamo no encontrado.');
+              Swal.fire({ title: 'Información', text: 'Préstamo no encontrado.', icon: 'info', timer: 4000, showConfirmButton: false })
               return;
           }
 
           if (monto > selectedLoan.saldo_pendiente) {
-              alert(`El pago de ${formatCurrency(monto)} excede el saldo pendiente de ${formatCurrency(selectedLoan.saldo_pendiente)}.`);
+              Swal.fire({ title: 'Error', text: `El pago de ${formatCurrency(monto)} excede el saldo pendiente de ${formatCurrency(selectedLoan.saldo_pendiente)}.`, icon: 'error', confirmButtonText: 'Entendido' })
               return;
           }
 
@@ -258,8 +319,8 @@ const handlePaymentInputChange = (e) => {
 
           if (loanUpdateError) throw loanUpdateError;
 
-          alert(`Pago de ${formatCurrency(monto)} registrado. Nuevo saldo: ${formatCurrency(nuevoSaldo)}.`);
-          
+          Swal.fire({ title: 'Éxito', text: `Pago de ${formatCurrency(monto)} registrado. Nuevo saldo: ${formatCurrency(nuevoSaldo)}.`, icon: 'success', timer: 4000, showConfirmButton: false })
+
           setPaymentFormData({
               loan_id: '',
               monto_pago: '',
@@ -271,7 +332,7 @@ const handlePaymentInputChange = (e) => {
           
       } catch (error) {
           console.error('Error procesando el pago:', error);
-          alert('Error al procesar el pago: ' + error.message);
+          Swal.fire({ title: 'Error', text: 'Error al procesar el pago: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
       } finally {
           setLoading(false);
       }
@@ -322,7 +383,8 @@ const handlePaymentInputChange = (e) => {
         
         if (error) throw error;
         
-        alert('Cliente guardado exitosamente');
+        Swal.fire({ title: 'Éxito', text: 'Cliente guardado exitosamente', icon: 'success', timer: 4000, showConfirmButton: false })
+
         setFormData({
           nombre: '',
           cedula: '',
@@ -334,18 +396,18 @@ const handlePaymentInputChange = (e) => {
         fetchClients();
       } catch (error) {
         console.error('Error guardando cliente:', error);
-        alert('Error al guardar: ' + error.message);
+        Swal.fire({ title: 'Error', text: 'Error al guardar: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
       } finally {
         setLoading(false);
       }
     } else {
-      alert('Por favor completa todos los campos');
+      Swal.fire({ title: 'Error', text: 'Por favor completa todos los campos', icon: 'error', confirmButtonText: 'Entendido' })
     }
   };
 
   const handleLoanSubmit = async () => {
     if (!loanFormData.cliente_id || !loanFormData.monto_prestado || !loanFormData.tasa_interes) {
-      alert('Por favor completa todos los campos requeridos');
+      Swal.fire({ title: 'Error', text: 'Por favor completa todos los campos requeridos', icon: 'error', confirmButtonText: 'Entendido' })
       return;
     }
 
@@ -378,7 +440,8 @@ const handlePaymentInputChange = (e) => {
       
       if (error) throw error;
       
-      alert('Préstamo registrado exitosamente');
+      Swal.fire({ title: 'Éxito', text: 'Préstamo registrado exitosamente', icon: 'success', timer: 4000, showConfirmButton: false })
+
       setLoanFormData({
         cliente_id: '',
         monto_prestado: '',
@@ -391,31 +454,9 @@ const handlePaymentInputChange = (e) => {
       fetchLoans();
     } catch (error) {
       console.error('Error guardando préstamo:', error);
-      alert('Error al guardar préstamo: ' + error.message);
+      Swal.fire({ title: 'Error', text: 'Error al guardar préstamo: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDeleteClient = async (id) => {
-    if (window.confirm('¿Estás seguro de eliminar este cliente?')) {
-      setLoading(true);
-      try {
-        const { error } = await supabase
-          .from('clientes')
-          .delete()
-          .eq('id', id);
-        
-        if (error) throw error;
-        
-        alert('Cliente eliminado');
-        fetchClients();
-      } catch (error) {
-        console.error('Error eliminando cliente:', error);
-        alert('Error al eliminar: ' + error.message);
-      } finally {
-        setLoading(false);
-      }
     }
   };
 
@@ -430,11 +471,12 @@ const handlePaymentInputChange = (e) => {
         
         if (error) throw error;
         
-        alert('Préstamo eliminado');
+        Swal.fire({ title: 'Éxito', text: 'Préstamo eliminado', icon: 'success', timer: 4000, showConfirmButton: false })
+        
         fetchLoans();
       } catch (error) {
         console.error('Error eliminando préstamo:', error);
-        alert('Error al eliminar: ' + error.message);
+        Swal.fire({ title: 'Error', text: 'Error al eliminar: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
       } finally {
         setLoading(false);
       }
@@ -543,133 +585,104 @@ const handlePaymentInputChange = (e) => {
         );
 
       case 'clients':
-        return (
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-gray-800">Clientes</h1>
-              <button
-                onClick={() => setShowForm(!showForm)}
-                disabled={loading}
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-              >
-                {showForm ? 'Cancelar' : '+ Nuevo Cliente'}
-              </button>
-            </div>
+      return (
+            <div className="p-6 relative"> 
+                <h1 className="text-3xl font-bold text-gray-800 mb-6">Clientes Registrados</h1>
 
-            {showForm && (
-              <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Nuevo Cliente</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre Completo</label>
-                    <input
-                      type="text"
-                      name="nombre"
-                      value={formData.nombre}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      placeholder="Ej: Juan Pérez"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cédula</label>
-                    <input
-                      type="text"
-                      name="cedula"
-                      value={formData.cedula}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      placeholder="Ej: 1234567890"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Teléfono</label>
-                    <input
-                      type="tel"
-                      name="telefono"
-                      value={formData.telefono}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      placeholder="Ej: 300 123 4567"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Dirección</label>
-                    <input
-                      type="text"
-                      name="direccion"
-                      value={formData.direccion}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      placeholder="Ej: Calle 123 # 45-67"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      placeholder="Ej: juan@ejemplo.com"
-                    />
-                  </div>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={loading}
-                    className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-green-700 transition-all disabled:opacity-50"
-                  >
-                    {loading ? 'Guardando...' : 'Guardar Cliente'}
-                  </button>
-                </div>
-              </div>
-            )}
+                {/* --------------------------------------------------------- */}
+                {/* *** 1. BOTÓN DE ACCIÓN FLOTANTE (FAB) *** */}
+                {/* Este botón siempre es visible y llama a setShowClientForm(true) */}
+                {/* --------------------------------------------------------- */}
+                <button
+                    onClick={() => setShowClientForm(true)}
+                    className="fixed bottom-20 right-6 z-40 p-4 bg-green-600 text-white rounded-full shadow-2xl hover:bg-green-700 transition-all transform hover:scale-105"
+                    title="Nuevo Cliente"
+                >
+                    {/* Ícono de Agregar */}
+                    <Plus size={28} /> 
+                </button>
+                
+                {/* --------------------------------------------------------- */}
+                {/* 2. Lista de Clientes (Sección Principal) */}
+                {/* --------------------------------------------------------- */}
+                {!showClientForm && (
+                    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                        {loading ? (
+                            // Muestra el estado de carga
+                            <div className="p-8 text-center text-gray-500">
+                                Cargando clientes...
+                            </div>
+                        ) : clients.length === 0 ? (
+                            // Muestra mensaje si no hay clientes
+                            <div className="p-8 text-center text-gray-500">
+                                <Users size={48} className="mx-auto text-gray-300 mb-4" />
+                                <p className="text-lg">No hay clientes registrados.</p>
+                                <p className="text-sm">Haz clic en el botón <Plus className="inline-block" size={16} /> para empezar a agregar.</p>
+                            </div>
+                        ) : (
+                            // TABLA DE CLIENTES
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Nombre</th>
+                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Cédula</th>
+                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Teléfono</th>
+                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {clients.map((client) => (
+                                            <tr key={client.id} className="border-t hover:bg-gray-50">
+                                                
+                                                <td className="px-6 py-4 font-semibold text-gray-800">
+                                                    {client.nombre}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">
+                                                    {client.cedula}
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">
+                                                    {client.telefono}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {/* Botón para Editar / Ver Detalles */}
+                                                    <button
+                                                        onClick={() => handleEditClient(client)}
+                                                        className="text-indigo-600 hover:text-indigo-800 mr-3"
+                                                        title="Editar Cliente"
+                                                    >
+                                                        <Eye size={18} />
+                                                    </button>
+                                                    {/* Botón para Eliminar Cliente */}
+                                                    <button
+                                                        onClick={() => handleDeleteClient(client.id)}
+                                                        className="text-red-600 hover:text-red-800"
+                                                        title="Eliminar Cliente"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
 
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Nombre</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Cédula</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Teléfono</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Email</th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clients.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                          No hay clientes registrados. Agrega tu primer cliente.
-                        </td>
-                      </tr>
-                    ) : (
-                      clients.map((client) => (
-                        <tr key={client.id} className="border-t hover:bg-gray-50">
-                          <td className="px-6 py-4 text-gray-800">{client.nombre}</td>
-                          <td className="px-6 py-4 text-gray-600">{client.cedula}</td>
-                          <td className="px-6 py-4 text-gray-600">{client.telefono}</td>
-                          <td className="px-6 py-4 text-gray-600">{client.email}</td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => handleDeleteClient(client.id)}
-                              disabled={loading}
-                              className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                            >
-                              <Trash2 size={20} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                {showClientForm && (
+                    <ClientForm
+                        clientToEdit={clientToEdit}
+                        onSave={handleSaveClient} 
+                        onCancel={() => { 
+                            setShowClientForm(false); 
+                            setClientToEdit(null);
+                        }}
+                    />
+                )}
             </div>
-          </div>
-        );
+      );
 
       case 'loans':
         return (
@@ -1082,6 +1095,8 @@ const handlePaymentInputChange = (e) => {
       <div className="max-w-7xl mx-auto pb-20">
         {renderContent()}
       </div>
+      
+
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4">
@@ -1148,7 +1163,7 @@ const SettingsPage = ({ totalCapital, handleUpdateCapital, loading, formatCurren
         if (!isNaN(value) && value >= 0) {
             handleUpdateCapital(value);
         } else {
-            alert('Por favor, ingresa un valor numérico válido para el capital.');
+            Swal.fire({ title: 'Error', text: 'Por favor, ingresa un valor numérico válido para el capital.', icon: 'error', confirmButtonText: 'Entendido' })
         }
     };
 
