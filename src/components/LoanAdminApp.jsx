@@ -96,30 +96,24 @@ const LoanAdminApp = () => {
   };
 
   const fetchLoans = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('prestamos')
-        .select(`
-          *,
-          clientes (
-            nombre,
-            cedula,
-            telefono
-          )
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setLoans(data || []);
-      const active = (data || []).filter(l => l.saldo_pendiente > 0);
-      setActiveLoansList(active);
-    } catch (error) {
-      console.error('Error cargando préstamos:', error);
-      Swal.fire({ title: 'Error', text: 'Error al cargar préstamos: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
-    } finally {
-      setLoading(false);
-    }
+      setLoading(true);
+      try {
+          const { data, error } = await supabase
+              .from('prestamos')
+              .select('*, clientes(nombre)') 
+              
+              .eq('estado', 'activo') 
+              
+              .order('fecha_inicio', { ascending: false });
+
+          if (error) throw error;
+          setLoans(data || []);
+          
+      } catch (error) {
+          console.error("Error al cargar préstamos:", error);
+      } finally {
+          setLoading(false);
+      }
   };
 
   const handleEditClient = (client) => {
@@ -269,6 +263,11 @@ const handlePaymentInputChange = (e) => {
           currency: 'COP',
           minimumFractionDigits: 0
       }).format(parseFloat(amount));
+  };
+
+  const cleanCurrencyInput = (input) => {
+      const cleaned = String(input).replace(/[$.]/g, '').replace(/[^0-9]/g, '');
+      return parseInt(cleaned) || '';
   };
 
   const handlePaymentSubmit = async () => {
@@ -460,27 +459,76 @@ const handlePaymentInputChange = (e) => {
     }
   };
 
-  const handleDeleteLoan = async (id) => {
-    if (window.confirm('¿Estás seguro de eliminar este préstamo?')) {
-      setLoading(true);
-      try {
-        const { error } = await supabase
-          .from('prestamos')
-          .delete()
-          .eq('id', id);
-        
-        if (error) throw error;
-        
-        Swal.fire({ title: 'Éxito', text: 'Préstamo eliminado', icon: 'success', timer: 4000, showConfirmButton: false })
-        
-        fetchLoans();
-      } catch (error) {
-        console.error('Error eliminando préstamo:', error);
-        Swal.fire({ title: 'Error', text: 'Error al eliminar: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
-      } finally {
-        setLoading(false);
-      }
-    }
+const handleDeleteLoan = (loanToDelete) => {
+      const montoPrestado = loanToDelete.monto_prestado; 
+      Swal.fire({
+          title: '¿Eliminar Préstamo?',
+          html: `
+              <p>El préstamo a ${loanToDelete.cliente_nombre} será desactivado. 
+              El monto de ${formatCurrency(montoPrestado)} será reintegrado al capital disponible.</p>
+              <p class="mt-2 font-semibold text-red-600">Esta acción no se puede deshacer.</p>
+          `,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#dc2626',
+          cancelButtonColor: '#6b7280',  
+          confirmButtonText: 'Sí, Eliminar y Reintegrar',
+          cancelButtonText: 'Cancelar',
+          reverseButtons: true,
+          customClass: {
+              popup: 'rounded-xl shadow-2xl', 
+              confirmButton: 'font-semibold px-4 py-2',
+              cancelButton: 'font-semibold px-4 py-2'
+          }
+      }).then(async (result) => {
+          
+          if (result.isConfirmed) {
+              
+              let loadingToast;
+              try {
+                  loadingToast = Swal.fire({
+                      title: 'Procesando...',
+                      text: 'Eliminando préstamo y reintegrando capital. Por favor, espere.',
+                      allowOutsideClick: false,
+                      showConfirmButton: false,
+                      didOpen: () => {
+                          Swal.showLoading()
+                      }
+                  });
+                  const { error: loanError } = await supabase
+                      .from('prestamos')
+                      .update({ estado: 'inactivo' }) 
+                      .eq('id', loanToDelete.id);
+
+                  if (loanError) throw loanError;
+                  const nuevoCapitalDisponible = capitalDisponible + montoPrestado;
+
+                  const { error: configError } = await supabase
+                      .from('configuracion_capital')
+                      .update({ capital_disponible: nuevoCapitalDisponible })
+                      .eq('id', 1);
+
+                  if (configError) throw configError;
+
+                  loadingToast.close(); 
+                  
+                  Swal.fire({
+                      title: '¡Eliminado y Reintegrado!',
+                      html: `El préstamo ha sido desactivado y **${formatCurrency(montoPrestado)}** ha sido reintegrado al capital.`,
+                      icon: 'success',
+                      confirmButtonColor: '#10b981',
+                  });
+                  
+                  fetchLoans(); 
+                  fetchCapitalConfig();
+                  
+              } catch (error) {
+                  loadingToast.close();
+                  console.error('Error al eliminar préstamo y reintegrar capital:', error);
+                  Swal.fire('Error', `Ocurrió un error al procesar la eliminación: ${error.message}`, 'error');
+              }
+          }
+      });
   };
 
   const formatCurrency = (amount) => {
@@ -511,7 +559,19 @@ const handlePaymentInputChange = (e) => {
       case 'home':
         return (
           <div className="p-6">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Panel Principal</h1>
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tighter mb-8">
+                <span className="
+                    bg-clip-text text-transparent 
+                    bg-gradient-to-r from-white via-cyan-300 to-blue-600 
+                    // Usamos una sombra de brillo (glow) para el efecto neón sin ser excesivo
+                    drop-shadow-[0_2px_15px_rgba(59,130,246,0.6)] 
+                    
+                    // TIPOGRAFÍA: Fuente Sans-Serif (Máximo Peso y compacto)
+                    font-sans uppercase 
+                ">
+                    Apex
+                </span>
+            </h1>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-6 text-white shadow-lg">
@@ -598,29 +658,22 @@ const handlePaymentInputChange = (e) => {
                     className="fixed bottom-20 right-6 z-40 p-4 bg-green-600 text-white rounded-full shadow-2xl hover:bg-green-700 transition-all transform hover:scale-105"
                     title="Nuevo Cliente"
                 >
-                    {/* Ícono de Agregar */}
                     <Plus size={28} /> 
                 </button>
                 
-                {/* --------------------------------------------------------- */}
-                {/* 2. Lista de Clientes (Sección Principal) */}
-                {/* --------------------------------------------------------- */}
                 {!showClientForm && (
                     <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
                         {loading ? (
-                            // Muestra el estado de carga
                             <div className="p-8 text-center text-gray-500">
                                 Cargando clientes...
                             </div>
                         ) : clients.length === 0 ? (
-                            // Muestra mensaje si no hay clientes
                             <div className="p-8 text-center text-gray-500">
                                 <Users size={48} className="mx-auto text-gray-300 mb-4" />
                                 <p className="text-lg">No hay clientes registrados.</p>
                                 <p className="text-sm">Haz clic en el botón <Plus className="inline-block" size={16} /> para empezar a agregar.</p>
                             </div>
                         ) : (
-                            // TABLA DE CLIENTES
                             <div className="overflow-x-auto">
                                 <table className="w-full">
                                     <thead className="bg-gray-50">
@@ -645,7 +698,6 @@ const handlePaymentInputChange = (e) => {
                                                     {client.telefono}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    {/* Botón para Editar / Ver Detalles */}
                                                     <button
                                                         onClick={() => handleEditClient(client)}
                                                         className="text-indigo-600 hover:text-indigo-800 mr-3"
@@ -653,7 +705,6 @@ const handlePaymentInputChange = (e) => {
                                                     >
                                                         <Eye size={18} />
                                                     </button>
-                                                    {/* Botón para Eliminar Cliente */}
                                                     <button
                                                         onClick={() => handleDeleteClient(client.id)}
                                                         className="text-red-600 hover:text-red-800"
@@ -745,20 +796,6 @@ const handlePaymentInputChange = (e) => {
                     />
                   </div>
 
-                  {/* <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Modalidad de Interés</label>
-                    <select
-                      name="modalidad"
-                      value={loanFormData.modalidad}
-                      onChange={handleLoanInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="semanal">Semanal</option>
-                      <option value="mensual">Mensual</option>
-                      <option value="total">Total (una sola vez)</option>
-                    </select>
-                  </div> */}
-
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Plazo (Ciclos de 4 Semanas)</label>
                     <input
@@ -808,17 +845,6 @@ const handlePaymentInputChange = (e) => {
                       />
                     </div>
                  </div>   
-                  {/* <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha Limite</label>
-                    <input
-                      type="date"
-                      name="fecha_vencimiento"
-                      value={loanFormData.fecha_vencimiento}
-                      onChange={handleLoanInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    />
-                  </div> */}
-
                   {loanFormData.monto_prestado && loanFormData.tasa_interes && (
                     <div className="md:col-span-2 bg-blue-50 p-4 rounded-xl">
                       <h3 className="font-bold text-gray-800 mb-2">Resumen del Préstamo</h3>
@@ -1018,7 +1044,6 @@ const handlePaymentInputChange = (e) => {
                   </div>
 
                   <div className="space-y-4">
-                      {/* Campo 1: Selección del Préstamo */}
                       <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Seleccionar Préstamo</label>
                           <select
@@ -1082,6 +1107,8 @@ const handlePaymentInputChange = (e) => {
                 formatCurrency={formatCurrency}
                 saldoDisponible={saldoDisponible}
                 totalSaldoPendiente={totalSaldoPendiente}
+                formatInputCurrency={formatInputCurrency}
+                cleanCurrencyInput={cleanCurrencyInput}
             />
         );
 
@@ -1153,11 +1180,16 @@ const handlePaymentInputChange = (e) => {
   );
 };
 
-const SettingsPage = ({ totalCapital, handleUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente }) => {
+const SettingsPage = ({ totalCapital, handleUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente, formatInputCurrency, cleanCurrencyInput }) => {
     const [newCapital, setNewCapital] = useState(totalCapital.toString());
     useEffect(() => {
         setNewCapital(totalCapital.toString());
     }, [totalCapital]);
+    const handleInputChange = (e) => {
+        const displayValue = e.target.value;
+        const numericValue = cleanCurrencyInput(displayValue);
+        setNewCapital(numericValue);
+    };
     const handleSave = () => {
         const value = parseFloat(newCapital);
         if (!isNaN(value) && value >= 0) {
@@ -1203,22 +1235,27 @@ const SettingsPage = ({ totalCapital, handleUpdateCapital, loading, formatCurren
                 </p>
 
                 <div className="flex space-x-4 items-center mb-4">
-                    <input
-                        type="number"
-                        step="1000"
-                        value={newCapital}
-                        onChange={(e) => setNewCapital(e.target.value)}
-                        placeholder="Ej. 30000000"
-                        className="flex-grow p-3 border-2 border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-gray-900"
-                    />
-                    <button
-                        onClick={handleSave}
-                        className="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-200 disabled:bg-red-300 flex items-center justify-center gap-2"
-                        disabled={loading || parseFloat(newCapital) === totalCapital || newCapital.trim() === ''}
-                    >
-                        {loading ? 'Guardando...' : 'Guardar'}
-                    </button>
-                </div>
+                  <input
+                      id="newCapitalInput"
+                      type="text" // Debe ser TEXTO
+                      
+                      // MUESTRA EL VALOR FORMATEADO USANDO TU FUNCIÓN
+                      value={formatInputCurrency(newCapital)} 
+                      
+                      onChange={handleInputChange} // Usa la función que limpia y actualiza
+                      placeholder="Ej. $ 30.000.000"
+                      
+                      // Clases de Estilo
+                      className="flex-grow p-3 border-2 border-gray-300 rounded-xl bg-white text-gray-900 focus:ring-red-500 focus:border-red-500 shadow-sm transition-all"
+                  />
+                  <button
+                      onClick={handleSave}
+                      className="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-200 disabled:bg-red-300 flex items-center justify-center gap-2"
+                      disabled={loading || parseFloat(newCapital) === totalCapital || !newCapital || parseFloat(newCapital) <= 0}
+                  >
+                      {loading ? 'Guardando...' : 'Guardar'}
+                  </button>
+              </div>
 
                 <p className="mt-3 text-lg text-gray-600">
                     Capital Actual: <span className="font-bold text-red-600">{formatCurrency(totalCapital)}</span>
