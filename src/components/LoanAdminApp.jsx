@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent } from 'lucide-react';
+import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import ClientForm from './ClientForm';
 import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx';
 
 const LoanAdminApp = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -532,11 +533,63 @@ const handleDeleteLoan = (loanToDelete) => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0
-    }).format(amount);
+      return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0
+      }).format(amount);
+    };
+    const exportToExcel = () => {
+    const dataToExport = loans.map((loan, index) => {
+      const cuotaSemanal = loan.total_a_pagar / (loan.plazo_dias / 7);
+      const progresoPago = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
+      const interes = loan.total_a_pagar - loan.monto_prestado;
+      const montoPagado = loan.total_a_pagar - loan.saldo_pendiente;
+      
+      return {
+        'No.': index + 1,
+        'Cliente': loan.clientes?.nombre || 'N/A',
+        'Cédula': loan.clientes?.cedula || 'N/A',
+        'Teléfono': loan.clientes?.telefono || 'N/A',
+        'Dirección': loan.clientes?.direccion || 'N/A',
+        'Email': loan.clientes?.email || 'N/A',
+        'Monto Prestado': loan.monto_prestado,
+        'Tasa Interés (%)': loan.tasa_interes,
+        'Interés Generado': interes,
+        'Total a Pagar': loan.total_a_pagar,
+        'Monto Pagado': montoPagado,
+        'Saldo Pendiente': loan.saldo_pendiente,
+        'Cuota Semanal': Math.round(cuotaSemanal),
+        'Progreso (%)': progresoPago.toFixed(2),
+        'Plazo (Días)': loan.plazo_dias,
+        'Plazo (Semanas)': loan.plazo_dias / 7,
+        'Modalidad': loan.modalidad,
+        'Estado': loan.estado,
+        'Fecha Préstamo': loan.fecha_prestamo,
+        'Fecha Vencimiento': loan.fecha_vencimiento,
+        'Comisionista': loan.nombre_comisionista || 'N/A',
+        'Comisión (%)': loan.porcentaje_comision || 0,
+        'Monto Comisión': loan.monto_prestado * ((loan.porcentaje_comision || 0) / 100) * (loan.plazo_dias / 28)
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    
+    const columnWidths = [
+      { wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 25 },
+      { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }, { wch: 15 }
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Préstamos');
+
+    const fecha = new Date().toISOString().split('T')[0];
+    const fileName = `Prestamos_${fecha}.xlsx`;
+    
+    XLSX.writeFile(workbook, fileName);
   };
 
   const activeLoans = loans.filter(l => l.estado === 'activo').length;
@@ -740,14 +793,16 @@ const handleDeleteLoan = (loanToDelete) => {
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-3xl font-bold text-gray-800">Préstamos</h1>
-              <button
-                onClick={() => setShowLoanForm(!showLoanForm)}
-                disabled={loading}
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
-              >
-                <Plus size={20} />
-                {showLoanForm ? 'Cancelar' : 'Nuevo Préstamo'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowLoanForm(!showLoanForm)}
+                  disabled={loading}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Plus size={20} />
+                  {showLoanForm ? 'Cancelar' : 'Nuevo Préstamo'}
+                </button>
+              </div>
             </div>
 
             {showLoanForm && (
@@ -1182,6 +1237,15 @@ const handleDeleteLoan = (loanToDelete) => {
                 </div>
               </div>
             )}
+
+            <button
+              onClick={exportToExcel}
+              disabled={loading || loans.length === 0}
+              className="fixed bottom-24 right-6 z-40 p-4 bg-gradient-to-r from-green-600 to-emerald-700 text-white rounded-full shadow-2xl hover:shadow-3xl hover:from-green-700 hover:to-emerald-800 transition-all transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              title="Exportar a Excel"
+            >
+              <FileSpreadsheet size={28} />
+            </button>
           </div>
         );
 
