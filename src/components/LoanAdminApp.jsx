@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus,TrendingUp, RefreshCw, Receipt } from 'lucide-react';
+import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import ClientForm from './ClientForm';
 import Swal from 'sweetalert2';
@@ -887,82 +887,121 @@ const handleDeleteLoan = (loanToDelete) => {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                       <tr>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Cliente</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Monto</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Interés</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Total</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Saldo Pendiente</th> 
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Modalidad</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Estado</th>
-                        <th className="px-6 py-4 text-left text-sm font-bold text-gray-700">Acciones</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Cliente</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Préstamo</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Cuota Semanal</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Progreso</th>
+                        <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-100">
                       {loans.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
+                          <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
                             No hay préstamos registrados. Crea el primer préstamo.
                           </td>
                         </tr>
                       ) : (
-                        loans.map((loan) => (
-                          <tr key={loan.id} className="border-t hover:bg-gray-50">
-                            <td 
-                                className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" 
-                                onClick={() => handleNavigateToPayment(loan.id)}
-                            >
-                                <div>
-                                    <p className="font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
-                                        {loan.clientes?.nombre}
-                                    </p>
-                                    <p className="text-sm text-gray-500">{loan.clientes?.telefono}</p>
+                        loans.map((loan) => {
+                          const cuotaSemanal = loan.total_a_pagar / (loan.plazo_dias / 7);
+                          const progresoPago = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
+                          
+                          return (
+                            <tr key={loan.id} className="hover:bg-blue-50 transition-colors">
+                              {/* CLIENTE */}
+                              <td className="px-4 py-3">
+                                <div 
+                                  className="cursor-pointer"
+                                  onClick={() => handleNavigateToPayment(loan.id)}
+                                >
+                                  <p className="font-semibold text-indigo-600 hover:text-indigo-800 text-sm">
+                                    {loan.clientes?.nombre}
+                                  </p>
+                                  <p className="text-xs text-gray-500">{loan.clientes?.telefono}</p>
                                 </div>
-                            </td>
-                            <td className="px-6 py-4 text-gray-800 font-semibold">
-                              {formatCurrency(loan.monto_prestado)}
-                            </td>
-                            <td className="px-6 py-4 text-orange-600 font-semibold">
-                              {loan.tasa_interes}% {loan.modalidad}
-                            </td>
-                            <td className="px-6 py-4 text-green-600 font-bold">
-                              {formatCurrency(loan.total_a_pagar)}
-                            </td>
-                            <td className="px-6 py-4 text-red-600 font-extrabold"> 
-                                {formatCurrency(loan.saldo_pendiente)}
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                {loan.plazo_dias} días
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`px-3 py-1 text-xs rounded-full ${
-                                loan.estado === 'activo' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {loan.estado}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => setSelectedLoan(loan)}
-                                  className="text-blue-600 hover:text-blue-800"
-                                >
-                                  <Eye size={20} />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteLoan(loan.id)}
-                                  disabled={loading}
-                                  className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                                >
-                                  <Trash2 size={20} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                              </td>
+
+                              {/* PRÉSTAMO */}
+                              <td className="px-4 py-3">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-gray-800">
+                                      {formatCurrency(loan.monto_prestado)}
+                                    </span>
+                                    <span className="text-xs text-orange-600 font-semibold">
+                                      +{loan.tasa_interes}%
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <Clock size={12} />
+                                    <span>{loan.plazo_dias} días</span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* CUOTA SEMANAL */}
+                              <td className="px-4 py-3">
+                                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-2 rounded-lg inline-block">
+                                  <p className="text-xs font-medium mb-0.5">Cuota Semanal</p>
+                                  <p className="text-lg font-bold">
+                                    {formatCurrency(cuotaSemanal)}
+                                  </p>
+                                </div>
+                              </td>
+
+                              {/* PROGRESO */}
+                              <td className="px-4 py-3">
+                                <div className="space-y-1">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-600 font-medium">Saldo</span>
+                                    <span className="font-bold text-red-600">
+                                      {formatCurrency(loan.saldo_pendiente)}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-2">
+                                    <div
+                                      className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full transition-all"
+                                      style={{ width: `${progresoPago}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-500">{progresoPago.toFixed(0)}% pagado</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                      loan.estado === 'activo' 
+                                        ? 'bg-green-100 text-green-700' 
+                                        : 'bg-gray-100 text-gray-700'
+                                    }`}>
+                                      {loan.estado}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* ACCIONES */}
+                              <td className="px-4 py-3">
+                                <div className="flex gap-2 justify-center">
+                                  <button
+                                    onClick={() => setSelectedLoan(loan)}
+                                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                    title="Ver detalle"
+                                  >
+                                    <Eye size={18} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteLoan(loan)}
+                                    disabled={loading}
+                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Eliminar"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -972,60 +1011,174 @@ const handleDeleteLoan = (loanToDelete) => {
 
             {selectedLoan && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-4">Detalle del Préstamo</h2>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm text-gray-600">Cliente</p>
-                      <p className="font-semibold text-gray-800">{selectedLoan.clientes?.nombre}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-sm text-gray-600">Monto prestado</p>
-                        <p className="font-semibold text-gray-800">{formatCurrency(selectedLoan.monto_prestado)}</p>
+                <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white">
+                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                      <DollarSign size={28} />
+                      Detalle del Préstamo
+                    </h2>
+                    <p className="text-blue-100 mt-1">{selectedLoan.clientes?.nombre}</p>
+                  </div>
+
+                  <div className="p-6 space-y-6">
+                    {/* Grid de Información Principal */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <DollarSign size={16} className="text-green-600" />
+                          <p className="text-xs text-gray-600 font-semibold">Monto Prestado</p>
+                        </div>
+                        <p className="text-xl font-bold text-gray-800">
+                          {formatCurrency(selectedLoan.monto_prestado)}
+                        </p>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Interés</p>
-                        <p className="font-semibold text-orange-600">
+
+                      <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <TrendingUp size={16} className="text-orange-600" />
+                          <p className="text-xs text-gray-600 font-semibold">Interés</p>
+                        </div>
+                        <p className="text-xl font-bold text-orange-600">
                           {formatCurrency(selectedLoan.total_a_pagar - selectedLoan.monto_prestado)}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{selectedLoan.tasa_interes}% {selectedLoan.modalidad}</p>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <DollarSign size={16} className="text-blue-600" />
+                          <p className="text-xs text-gray-600 font-semibold">Total a Pagar</p>
+                        </div>
+                        <p className="text-xl font-bold text-blue-600">
+                          {formatCurrency(selectedLoan.total_a_pagar)}
+                        </p>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl p-4 border border-red-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <DollarSign size={16} className="text-red-600" />
+                          <p className="text-xs text-gray-600 font-semibold">Saldo Pendiente</p>
+                        </div>
+                        <p className="text-xl font-bold text-red-600">
+                          {formatCurrency(selectedLoan.saldo_pendiente)}
+                        </p>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-4 border border-purple-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock size={16} className="text-purple-600" />
+                          <p className="text-xs text-gray-600 font-semibold">Plazo</p>
+                        </div>
+                        <p className="text-xl font-bold text-purple-600">
+                          {selectedLoan.plazo_dias / 7} sem
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{selectedLoan.plazo_dias} días</p>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Calendar size={16} className="text-indigo-600" />
+                          <p className="text-xs text-gray-600 font-semibold">Estado</p>
+                        </div>
+                        <p className={`text-lg font-bold capitalize ${
+                          selectedLoan.estado === 'activo' ? 'text-green-600' : 'text-gray-600'
+                        }`}>
+                          {selectedLoan.estado}
                         </p>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Total a pagar</p>
-                      <p className="font-bold text-2xl text-green-600">{formatCurrency(selectedLoan.total_a_pagar)}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-sm text-gray-600">Tasa</p>
-                        <p className="font-semibold text-gray-800">{selectedLoan.tasa_interes}% {selectedLoan.modalidad}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Plazo</p>
-                        <p className="font-semibold text-gray-800">{selectedLoan.plazo_dias} días</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-sm text-gray-600">Fecha préstamo</p>
-                        <p className="font-semibold text-gray-800">{selectedLoan.fecha_prestamo}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Vencimiento</p>
-                        <p className="font-semibold text-gray-800">{selectedLoan.fecha_vencimiento}</p>
+
+                    {/* Cuota Semanal Destacada */}
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 text-white shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-blue-100 text-sm font-medium mb-1">Cuota Semanal</p>
+                          <p className="text-4xl font-bold">
+                            {formatCurrency(selectedLoan.total_a_pagar / (selectedLoan.plazo_dias / 7))}
+                          </p>
+                          <p className="text-blue-200 text-sm mt-2">
+                            Durante {selectedLoan.plazo_dias / 7} semanas
+                          </p>
+                        </div>
+                        <DollarSign size={64} className="opacity-20" />
                       </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Saldo pendiente</p>
-                      <p className="font-bold text-xl text-blue-600">{formatCurrency(selectedLoan.saldo_pendiente)}</p>
+
+                    {/* Fechas */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <p className="text-xs text-gray-600 font-semibold mb-1">Fecha Préstamo</p>
+                        <p className="text-lg font-bold text-gray-800">
+                          {new Date(selectedLoan.fecha_prestamo).toLocaleDateString('es-CO', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <p className="text-xs text-gray-600 font-semibold mb-1">Vencimiento</p>
+                        <p className="text-lg font-bold text-gray-800">
+                          {new Date(selectedLoan.fecha_vencimiento).toLocaleDateString('es-CO', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Comisión */}
+                    {selectedLoan.porcentaje_comision > 0 && (
+                      <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <UserCheck size={18} className="text-orange-600" />
+                          <p className="text-sm font-bold text-gray-800">Información de Comisión</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Comisionista</p>
+                            <p className="font-semibold text-gray-800">{selectedLoan.nombre_comisionista}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1">Porcentaje</p>
+                            <p className="font-semibold text-orange-600">{selectedLoan.porcentaje_comision}%</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Barra de Progreso */}
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-sm font-semibold text-gray-700">Progreso de Pago</p>
+                        <p className="text-sm font-bold text-green-600">
+                          {(((selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente) / selectedLoan.total_a_pagar) * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div
+                          className="bg-gradient-to-r from-green-500 to-emerald-600 h-3 rounded-full transition-all"
+                          style={{ width: `${((selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente) / selectedLoan.total_a_pagar) * 100}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center mt-2 text-xs text-gray-600">
+                        <span>Pagado: {formatCurrency(selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente)}</span>
+                        <span>Pendiente: {formatCurrency(selectedLoan.saldo_pendiente)}</span>
+                      </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setSelectedLoan(null)}
-                    className="w-full mt-6 bg-gray-600 text-white py-3 rounded-xl font-bold hover:bg-gray-700 transition-all"
-                  >
-                    Cerrar
-                  </button>
+
+                  {/* Footer */}
+                  <div className="p-6 bg-gray-50 border-t">
+                    <button
+                      onClick={() => setSelectedLoan(null)}
+                      className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 rounded-xl font-bold hover:from-gray-700 hover:to-gray-800 transition-all"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1180,24 +1333,32 @@ const handleDeleteLoan = (loanToDelete) => {
   );
 };
 
-const SettingsPage = ({ totalCapital, handleUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente, formatInputCurrency, cleanCurrencyInput }) => {
+const SettingsPage = ({ totalCapital, onUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente, formatInputCurrency, cleanCurrencyInput }) => {
     const [newCapital, setNewCapital] = useState(totalCapital.toString());
+    
     useEffect(() => {
         setNewCapital(totalCapital.toString());
     }, [totalCapital]);
+    
     const handleInputChange = (e) => {
         const displayValue = e.target.value;
         const numericValue = cleanCurrencyInput(displayValue);
         setNewCapital(numericValue);
     };
+    
     const handleSave = () => {
         const value = parseFloat(newCapital);
         if (!isNaN(value) && value >= 0) {
-            handleUpdateCapital(value);
+            onUpdateCapital(value);
         } else {
             Swal.fire({ title: 'Error', text: 'Por favor, ingresa un valor numérico válido para el capital.', icon: 'error', confirmButtonText: 'Entendido' })
         }
     };
+
+    const isDisabled = loading || 
+        parseFloat(newCapital) === totalCapital || 
+        !newCapital || 
+        parseFloat(newCapital) <= 0;
 
     return (
         <div className="p-6 space-y-8 max-w-2xl mx-auto">
@@ -1222,44 +1383,93 @@ const SettingsPage = ({ totalCapital, handleUpdateCapital, loading, formatCurren
                     </p>
                 </div>
             </div>
-            <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 max-w-lg">
-                <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-xl font-semibold text-gray-700 flex items-center">
-                        <RefreshCw className="mr-3 text-red-500" size={20} />
-                        Actualizar Capital Invertido
-                    </h3>
+
+            {/* NUEVA TARJETA MEJORADA */}
+            <div className="bg-gradient-to-br from-white to-gray-50 p-8 rounded-3xl shadow-2xl border border-gray-100">
+                {/* Header */}
+                <div className="mb-6">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2.5 bg-red-100 rounded-xl">
+                            <RefreshCw className="text-red-600" size={24} />
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-800">
+                            Actualizar Capital Invertido
+                        </h3>
+                    </div>
+                    <p className="text-gray-500 text-sm ml-14">
+                        Actualiza el monto total de capital disponible para préstamos
+                    </p>
                 </div>
 
-                <p className="text-sm text-gray-500 mb-4">
-                    Monto total de capital que tienes disponible para prestar.
-                </p>
+                {/* Current Capital Display */}
+                <div className="bg-gradient-to-r from-red-50 to-orange-50 p-5 rounded-2xl mb-6 border border-red-100">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white rounded-lg shadow-sm">
+                                <TrendingUp className="text-red-600" size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
+                                    Capital Actual
+                                </p>
+                                <p className="text-3xl font-bold text-red-600">
+                                    {formatCurrency(totalCapital)}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <div className="flex space-x-4 items-center mb-4">
-                  <input
-                      id="newCapitalInput"
-                      type="text" // Debe ser TEXTO
-                      
-                      // MUESTRA EL VALOR FORMATEADO USANDO TU FUNCIÓN
-                      value={formatInputCurrency(newCapital)} 
-                      
-                      onChange={handleInputChange} // Usa la función que limpia y actualiza
-                      placeholder="Ej. $ 30.000.000"
-                      
-                      // Clases de Estilo
-                      className="flex-grow p-3 border-2 border-gray-300 rounded-xl bg-white text-gray-900 focus:ring-red-500 focus:border-red-500 shadow-sm transition-all"
-                  />
-                  <button
-                      onClick={handleSave}
-                      className="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition duration-200 disabled:bg-red-300 flex items-center justify-center gap-2"
-                      disabled={loading || parseFloat(newCapital) === totalCapital || !newCapital || parseFloat(newCapital) <= 0}
-                  >
-                      {loading ? 'Guardando...' : 'Guardar'}
-                  </button>
-              </div>
+                {/* Input Section */}
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="newCapitalInput" className="block text-sm font-semibold text-gray-700 mb-2">
+                            Nuevo Capital
+                        </label>
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <DollarSign className="text-gray-400" size={20} />
+                            </div>
+                            <input
+                                id="newCapitalInput"
+                                type="text"
+                                value={formatInputCurrency(newCapital)}
+                                onChange={handleInputChange}
+                                placeholder="Ej. $ 30.000.000"
+                                className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl bg-white text-gray-900 text-lg font-medium focus:ring-2 focus:ring-red-500 focus:border-red-500 shadow-sm transition-all placeholder:text-gray-400"
+                            />
+                        </div>
+                    </div>
 
-                <p className="mt-3 text-lg text-gray-600">
-                    Capital Actual: <span className="font-bold text-red-600">{formatCurrency(totalCapital)}</span>
-                </p>
+                    {/* Save Button */}
+                    <button
+                        onClick={handleSave}
+                        disabled={isDisabled}
+                        className="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
+                    >
+                        {loading ? (
+                            <>
+                                <RefreshCw className="animate-spin" size={20} />
+                                Guardando...
+                            </>
+                        ) : (
+                            <>
+                                <RefreshCw size={20} />
+                                Guardar Capital
+                            </>
+                        )}
+                    </button>
+                </div>
+
+                {/* Helper Text */}
+                {newCapital && parseFloat(newCapital) !== totalCapital && parseFloat(newCapital) > 0 && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-700">
+                            <span className="font-semibold">Cambio: </span>
+                            {formatCurrency(totalCapital)} → {formatCurrency(parseFloat(newCapital))}
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );
