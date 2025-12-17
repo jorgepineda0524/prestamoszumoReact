@@ -23,7 +23,8 @@ const LoanAdminApp = () => {
   const [activeLoansList, setActiveLoansList] = useState([]);
   const [showClientForm, setShowClientForm] = useState(false); 
   const [clientToEdit, setClientToEdit] = useState(null);
-  
+  const [comisionistas, setComisionistas] = useState([]); 
+  const [loanSubTab, setLoanSubTab] = useState('loansList');
   const [formData, setFormData] = useState({
     nombre: '',
     cedula: '',
@@ -36,10 +37,9 @@ const LoanAdminApp = () => {
     cliente_id: '',
     monto_prestado: '',
     tasa_interes: '',
-    // modalidad: 'Ciclos_4_Semanas',
     plazo_dias: '1',
     fecha_prestamo: new Date().toISOString().split('T')[0],
-    nombre_comisionista: '', 
+    comisionista_id: '',
     porcentaje_comision: '0'
   });
 
@@ -55,6 +55,7 @@ const LoanAdminApp = () => {
     }
 
     fetchTotalCapital();
+    fetchComisionistas();
   }, [activeTab]);
 
   const fetchTotalCapital = async () => {
@@ -74,6 +75,21 @@ const LoanAdminApp = () => {
           }
       } catch (error) {
           console.error('Error cargando capital total:', error);
+      }
+  };
+
+  const fetchComisionistas = async () => {
+      try {
+          const { data, error } = await supabase
+              .from('comisionistas')
+              .select('*')
+              .eq('estado', true)
+              .order('nombre', { ascending: true });
+
+          if (error) throw error;
+          setComisionistas(data || []);
+      } catch (error) {
+          console.error('Error cargando comisionistas:', error);
       }
   };
 
@@ -413,8 +429,9 @@ const handlePaymentInputChange = (e) => {
 
     setLoading(true);
     try {
-      const { total, fechaVencimiento } = calculateLoanDetails();
+      // const { total, fechaVencimiento } = calculateLoanDetails();
       
+      const loanDetails = calculateLoanDetails();
       const numCiclos = parseInt(loanFormData.plazo_dias) || 1;
       const plazoTotalDias = numCiclos * 28;
 
@@ -425,11 +442,11 @@ const handlePaymentInputChange = (e) => {
         modalidad: 'Semanal',
         plazo_dias: plazoTotalDias,
         fecha_prestamo: loanFormData.fecha_prestamo,
-        fecha_vencimiento: fechaVencimiento,
-        total_a_pagar: parseFloat(total),
-        saldo_pendiente: parseFloat(total),
+        fecha_vencimiento: loanDetails.fechaVencimiento,
+        total_a_pagar: parseFloat(loanDetails.total),
+        saldo_pendiente: parseFloat(loanDetails.total),
         estado: 'activo',
-        nombre_comisionista: loanFormData.nombre_comisionista || 'N/A', 
+        comisionista_id: loanFormData.comisionista_id || null,
         porcentaje_comision: parseFloat(loanFormData.porcentaje_comision) || 0
       };
 
@@ -439,6 +456,25 @@ const handlePaymentInputChange = (e) => {
         .select();
       
       if (error) throw error;
+
+      const prestamoId = prestamoData[0].id; 
+        const montoComision = parseFloat(loanDetails.montoComision);
+        
+        if (loanFormData.comisionista_id && montoComision > 0) {
+            const comisionData = {
+                prestamo_id: prestamoId,
+                comisionista_id: loanFormData.comisionista_id,
+                monto_comision: montoComision,
+                porcentaje_aplicado: parseFloat(loanFormData.porcentaje_comision),
+                estado_pago: 'pendiente'
+            };
+
+            const { error: comisionError } = await supabase
+                .from('registro_comisiones')
+                .insert([comisionData]);
+
+            if (comisionError) throw comisionError;
+        }
       
       Swal.fire({ title: 'Éxito', text: 'Préstamo registrado exitosamente', icon: 'success', timer: 4000, showConfirmButton: false })
 
@@ -448,7 +484,9 @@ const handlePaymentInputChange = (e) => {
         tasa_interes: '',
         modalidad: 'mensual',
         plazo_dias: '30',
-        fecha_prestamo: new Date().toISOString().split('T')[0]
+        fecha_prestamo: new Date().toISOString().split('T')[0],
+        comisionista_id: '',
+        porcentaje_comision: '0'
       });
       setShowLoanForm(false);
       fetchLoans();
@@ -792,19 +830,43 @@ const handleDeleteLoan = (loanToDelete) => {
         return (
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-gray-800">Préstamos</h1>
+              <h1 className="text-3xl font-bold text-gray-800">
+                  {loanSubTab === 'loansList' ? 'Préstamos' : 'Comisiones'}
+              </h1>
               <div className="flex gap-3">
-                <button
-                  onClick={() => setShowLoanForm(!showLoanForm)}
-                  disabled={loading}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
-                >
-                  <Plus size={20} />
-                  {showLoanForm ? 'Cancelar' : 'Nuevo Préstamo'}
-                </button>
+                {loanSubTab === 'loansList' && (
+                      <button
+                          onClick={() => setShowLoanForm(!showLoanForm)}
+                          disabled={loading}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                      >
+                          <Plus size={20} />
+                          {showLoanForm ? 'Cancelar' : 'Nuevo'}
+                      </button>
+                  )}
               </div>
             </div>
 
+            <div className="flex border-b border-gray-200 mb-6">
+                <button
+                    onClick={() => { setLoanSubTab('loansList'); setShowLoanForm(false); }} // Al cambiar, ocultamos el formulario
+                    className={`pb-3 px-4 font-semibold text-sm transition-colors ${
+                        loanSubTab === 'loansList' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    Préstamos Activos
+                </button>
+                <button
+                    onClick={() => { setLoanSubTab('commissions'); setShowLoanForm(false); }}
+                    className={`pb-3 px-4 font-semibold text-sm transition-colors ${
+                        loanSubTab === 'commissions' ? 'border-b-2 border-red-600 text-red-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    Comisiones (<Percent size={14} className="inline-block mb-1" />)
+                </button>
+            </div>
+
+            {loanSubTab === 'loansList' && (<>      
             {showLoanForm && (
               <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Nuevo Préstamo</h2>
@@ -876,15 +938,20 @@ const handleDeleteLoan = (loanToDelete) => {
 
                   <div className="md:col-span-2 grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Comisionista (Nombre)</label>
-                      <input
-                        type="text"
-                        name="nombre_comisionista"
-                        value={loanFormData.nombre_comisionista}
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Comisionista</label>
+                      <select
+                        name="comisionista_id" 
+                        value={loanFormData.comisionista_id}
                         onChange={handleLoanInputChange}
                         className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                        placeholder="Ej: Pedro García"
-                      />
+                      >
+                        <option value="">Selecciona (Opcional)</option>
+                        {comisionistas.map((comisionista) => ( 
+                          <option key={comisionista.id} value={comisionista.id}>
+                            {comisionista.nombre}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
@@ -1246,6 +1313,35 @@ const handleDeleteLoan = (loanToDelete) => {
             >
               <FileSpreadsheet size={28} />
             </button>
+            </>
+            )}
+
+          {loanSubTab === 'commissions' && (
+                /* Contenido de Comisiones (Mover el contenido del antiguo case 'commissions' aquí) */
+                <div className="bg-white rounded-2xl shadow-lg p-6">
+                    {comisionistas.length === 0 ? (
+                        <p className="text-gray-500">No hay comisionistas registrados o no se han cargado.</p>
+                    ) : (
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">Comisiones Pendientes de Pago</h2>
+                            {comisionistas.map(c => (
+                                <div key={c.id} className="border-b py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded-lg">
+                                    <div>
+                                        <span className="font-semibold text-gray-800">{c.nombre}</span>
+                                        <p className="text-sm text-gray-500">{c.cedula}</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => Swal.fire('Comisiones', `Lógica para pagar comisiones a ${c.nombre} aquí.`, 'info')}
+                                        className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-700 transition-colors"
+                                    >
+                                        Ver Detalle y Pagar
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
         );
 
@@ -1314,6 +1410,33 @@ const handleDeleteLoan = (loanToDelete) => {
               </div>
           </div>
       );
+
+      case 'commissions': // <--- NUEVA PESTAÑA
+        return (
+          <div className="p-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestión de Comisiones</h1>
+            {comisionistas.length === 0 ? (
+              <p className="text-gray-500">No hay comisionistas registrados.</p>
+            ) : (
+              <div className="bg-white rounded-2xl p-6 shadow-lg">
+                  {/* Aquí se listarán los comisionistas y sus comisiones pendientes */}
+                  <h2 className="text-xl font-bold mb-4">Comisiones Pendientes de Pago</h2>
+                  
+                  {comisionistas.map(c => (
+                      <div key={c.id} className="border-b py-3 flex justify-between items-center">
+                          <span className="font-semibold">{c.nombre}</span>
+                          <button 
+                              onClick={() => Swal.fire('Comisiones', `Lógica para pagar comisiones a ${c.nombre} aquí.`, 'info')}
+                              className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm"
+                          >
+                              Ver Detalle y Pagar
+                          </button>
+                      </div>
+                  ))}
+              </div>
+            )}
+          </div>
+    );
 
       case 'settings':
         return (
