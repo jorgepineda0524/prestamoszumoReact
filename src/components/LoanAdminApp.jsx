@@ -31,6 +31,9 @@ const LoanAdminApp = () => {
   const [clientToEdit, setClientToEdit] = useState(null);
   const [comisionistas, setComisionistas] = useState([]); 
   const [loanSubTab, setLoanSubTab] = useState('loansList');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pin, setPin] = useState('');
+  const SECURITY_PIN = "9510";
   const [formData, setFormData] = useState({
     nombre: '',
     cedula: '',
@@ -46,7 +49,8 @@ const LoanAdminApp = () => {
     plazo_dias: '1',
     fecha_prestamo: new Date().toISOString().split('T')[0],
     comisionista_id: '',
-    porcentaje_comision: '0'
+    porcentaje_comision: '0',
+    dia_cobro: 'Lunes'
   });
 
   useEffect(() => {
@@ -63,6 +67,27 @@ const LoanAdminApp = () => {
     fetchTotalCapital();
     fetchComisionistas();
   }, [activeTab]);
+
+  const handleVerifyPin = (enteredPin) => {
+    if (enteredPin === SECURITY_PIN) {
+      setIsAuthenticated(true);
+      if (navigator.vibrate) navigator.vibrate(50); 
+    } else {
+      setTimeout(() => {
+        setPin('');
+        Swal.fire({
+          title: 'PIN Incorrecto',
+          toast: true,
+          position: 'top',
+          showConfirmButton: false,
+          timer: 1500,
+          icon: 'error',
+          background: '#1e293b',
+          color: '#fff'
+        });
+      }, 300);
+    }
+  };
 
   const fetchTotalCapital = async () => {
       try {
@@ -623,6 +648,7 @@ const handlePaymentInputChange = (e) => {
         fecha_vencimiento: loanDetails.fechaVencimiento,
         total_a_pagar: parseFloat(loanDetails.total),
         saldo_pendiente: parseFloat(loanDetails.total),
+        dia_cobro: loanFormData.dia_cobro,
         estado: 'activo'
       };
 
@@ -662,7 +688,8 @@ const handlePaymentInputChange = (e) => {
         plazo_dias: '30',
         fecha_prestamo: new Date().toISOString().split('T')[0],
         comisionista_id: '',
-        porcentaje_comision: '0'
+        porcentaje_comision: '0',
+        dia_cobro: 'Lunes'
       });
       setShowLoanForm(false);
       fetchLoans();
@@ -1229,6 +1256,53 @@ const handleDeleteLoan = (loanToDelete) => {
                       className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
                     />
                   </div>
+                  
+                  <div className="col-span-full">
+                    <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-widest text-center text-[10px]">
+                      Día de Cobro Semanal
+                    </label>
+                    
+                    {/* Contenedor Flex para una sola línea */}
+                    <div className="flex justify-between gap-1 sm:gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                      {[
+                        { d: 'Lunes', c: 'bg-red-500', t: 'text-red-500' },
+                        { d: 'Martes', c: 'bg-orange-500', t: 'text-orange-500' },
+                        { d: 'Miércoles', c: 'bg-yellow-500', t: 'text-yellow-500' },
+                        { d: 'Jueves', c: 'bg-green-500', t: 'text-green-500' },
+                        { d: 'Viernes', c: 'bg-blue-500', t: 'text-blue-500' },
+                        { d: 'Sábado', c: 'bg-indigo-500', t: 'text-indigo-500' },
+                        { d: 'Domingo', c: 'bg-purple-500', t: 'text-purple-500' }
+                      ].map((item) => {
+                        const isSelected = loanFormData.dia_cobro === item.d;
+                        return (
+                          <button
+                            key={item.d}
+                            type="button"
+                            onClick={() => setLoanFormData({ ...loanFormData, dia_cobro: item.d })}
+                            className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${
+                              isSelected
+                                ? `${item.c} text-white shadow-md scale-105 z-10`
+                                : 'bg-white text-gray-400 hover:bg-gray-50'
+                            }`}
+                          >
+                            {/* Letra inicial grande */}
+                            <span className={`text-sm font-black ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                              {item.d.charAt(0)}
+                            </span>
+                            {/* Nombre corto abajo */}
+                            <span className={`text-[8px] font-bold uppercase ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
+                              {item.d.substring(0, 3)}
+                            </span>
+                            
+                            {/* Indicador de punto si está seleccionado */}
+                            {isSelected && (
+                              <div className="w-1 h-1 bg-white rounded-full mt-0.5 animate-pulse" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
                   <div className="md:col-span-2 grid grid-cols-2 gap-4">
                     <div>
@@ -1335,7 +1409,12 @@ const handleDeleteLoan = (loanToDelete) => {
                                   <p className="font-semibold text-indigo-600 hover:text-indigo-800 text-sm">
                                     {loan.clientes?.nombre}
                                   </p>
-                                  <p className="text-xs text-gray-500">{loan.clientes?.telefono}</p>
+                                  <div className="flex items-center gap-1 mt-1">
+                                    {/* ETIQUETA DEL DÍA DE COBRO */}
+                                    <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-md font-black uppercase border border-blue-100">
+                                      Cobra: {loan.dia_cobro}
+                                    </span>
+                                  </div>
                                 </div>
                               </td>
 
@@ -1500,6 +1579,16 @@ const handleDeleteLoan = (loanToDelete) => {
                           selectedLoan.estado === 'activo' ? 'text-green-600' : 'text-gray-600'
                         }`}>
                           {selectedLoan.estado}
+                        </p>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Calendar size={16} className="text-blue-600" />
+                          <p className="text-xs text-gray-600 font-semibold">Día de Cobro</p>
+                        </div>
+                        <p className="text-xl font-black text-blue-700">
+                          Todos los {selectedLoan.dia_cobro}
                         </p>
                       </div>
                     </div>
@@ -1892,11 +1981,18 @@ const handleDeleteLoan = (loanToDelete) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {!isAuthenticated ? (
+        <LoginScreen 
+          pin={pin} 
+          setPin={setPin} 
+          onVerify={handleVerifyPin} 
+        />
+      ) : (
+        /* 2. SI ESTÁ AUTENTICADO, RENDERIZA TODO LO DEMÁS */
+        <>
       <div className="max-w-7xl mx-auto pb-20">
         {renderContent()}
       </div>
-      
-
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4">
@@ -1949,6 +2045,8 @@ const handleDeleteLoan = (loanToDelete) => {
           </div>
         </div>
       </nav>
+      </>
+      )}
     </div>
   );
 };
@@ -2092,6 +2190,75 @@ const SettingsPage = ({ totalCapital, onUpdateCapital, loading, formatCurrency, 
                 )}
             </div>
         </div>
+    );
+};
+
+const LoginScreen = ({ pin, setPin, onVerify }) => {
+    const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "delete"];
+
+    const handlePress = (val) => {
+      if (val === "delete") {
+        setPin(pin.slice(0, -1));
+      } else if (val !== "" && pin.length < 4) {
+        const newPin = pin + val;
+        setPin(newPin);
+        if (newPin.length === 4) onVerify(newPin);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-[1000] p-6 overflow-hidden">
+        {/* Efectos de Luces de Fondo (Acorde a tu gradiente de Apex) */}
+        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-cyan-500/20 rounded-full blur-[120px]"></div>
+
+        <div className="relative flex flex-col items-center w-full max-w-xs animate-in fade-in zoom-in duration-500">
+          {/* Logo / Icono Superior */}
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2.5rem] mb-8 shadow-2xl shadow-blue-500/20 border border-white/10">
+            <Smartphone className="text-white" size={42} />
+          </div>
+          
+          <h1 className="text-white text-3xl font-black tracking-tighter mb-2 italic">
+            APEX <span className="text-cyan-400">FINANCE</span>
+          </h1>
+          <p className="text-slate-400 text-sm font-medium mb-12 tracking-widest uppercase">Seguridad Requerida</p>
+
+          {/* Visualizador de PIN (Círculos que brillan) */}
+          <div className="flex gap-6 mb-16">
+            {[1, 2, 3, 4].map((_, i) => (
+              <div
+                key={i}
+                className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${
+                  pin.length > i 
+                  ? 'bg-cyan-400 border-cyan-400 scale-125 shadow-[0_0_20px_rgba(34,211,238,0.8)]' 
+                  : 'border-slate-700 bg-transparent'
+                }`}
+              ></div>
+            ))}
+          </div>
+
+          {/* Teclado Numérico Estilizado */}
+          <div className="grid grid-cols-3 gap-5 w-full">
+            {digits.map((d, i) => (
+              <button
+                key={i}
+                onClick={() => handlePress(d)}
+                className={`h-20 w-20 rounded-3xl flex items-center justify-center text-2xl font-bold transition-all active:scale-90 active:bg-blue-600 ${
+                  d === "" ? "opacity-0 pointer-events-none" : 
+                  d === "delete" ? "text-slate-400 hover:text-white" : 
+                  "text-white bg-slate-800/40 hover:bg-slate-800/60 border border-white/5 backdrop-blur-md shadow-sm"
+                }`}
+              >
+                {d === "delete" ? <X size={28} /> : d}
+              </button>
+            ))}
+          </div>
+          
+          <p className="mt-12 text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em]">
+            Authorized Personnel Only
+          </p>
+        </div>
+      </div>
     );
 };
 
