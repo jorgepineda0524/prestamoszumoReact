@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent, FileSpreadsheet, Download } from 'lucide-react';
+import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent, FileSpreadsheet, Smartphone, X, Check, CheckCircle, Search } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import ClientForm from './ClientForm';
+import UserForm from './UserForm';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
 
@@ -15,13 +15,19 @@ const LoanAdminApp = () => {
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [totalCapital, setTotalCapital] = useState(0); 
   const [settingsLoading, setSettingsLoading] = useState(false);
+  const [userSubTab, setUserSubTab] = useState('clientsList'); 
+  const [showUserFormModal, setShowUserFormModal] = useState(false);
+  const [formMode, setFormMode] = useState(null);
+  const [selectedComisionista, setSelectedComisionista] = useState(null);
+  const [selectedCommissions, setSelectedCommissions] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const [paymentFormData, setPaymentFormData] = useState({
     loan_id: '',
     monto_pago: '',
     fecha_pago: new Date().toISOString().split('T')[0],
   });
-  const [activeLoansList, setActiveLoansList] = useState([]);
-  const [showClientForm, setShowClientForm] = useState(false); 
+  const [activeLoansList, setActiveLoansList] = useState([]); 
   const [clientToEdit, setClientToEdit] = useState(null);
   const [comisionistas, setComisionistas] = useState([]); 
   const [loanSubTab, setLoanSubTab] = useState('loansList');
@@ -82,14 +88,26 @@ const LoanAdminApp = () => {
       try {
           const { data, error } = await supabase
               .from('comisionistas')
-              .select('*')
+              .select(`
+                  *,
+                  registro_comisiones (
+                      id,
+                      monto_comision,
+                      estado_pago,
+                      prestamos (
+                          id,
+                          monto_prestado,
+                          clientes (nombre)
+                      )
+                  )
+              `)
               .eq('estado', true)
               .order('nombre', { ascending: true });
 
           if (error) throw error;
           setComisionistas(data || []);
       } catch (error) {
-          console.error('Error cargando comisionistas:', error);
+          console.error('Error fetching comisionistas:', error.message);
       }
   };
 
@@ -133,14 +151,102 @@ const LoanAdminApp = () => {
       }
   };
 
+  const filteredLoans = useMemo(() => {
+      if (!searchTerm.trim()) return loans;
+
+      const busqueda = searchTerm.toLowerCase().trim();
+      
+      return loans.filter(loan => {
+          const nombreCliente = loan.clientes?.nombre?.toLowerCase() || '';
+          const nombreComisionista = loan.nombre_comisionista?.toLowerCase() || '';
+          
+          return nombreCliente.includes(busqueda) || nombreComisionista.includes(busqueda);
+      });
+  }, [loans, searchTerm]); 
+
   const handleEditClient = (client) => {
       setClientToEdit(client);
-      setShowClientForm(true);
+      setFormMode(client.hasOwnProperty('estado') ? 'client' : 'comisionista');
+      setShowUserFormModal(true);
   };
 
-  const handleSaveClient = (newOrUpdatedClient) => {
-      fetchClients(); 
-      setClientToEdit(null); 
+  const handlePayCommissions = async () => {
+      if (selectedCommissions.length === 0) return;
+      setLoading(true);
+      try {
+          const { error } = await supabase
+              .from('registro_comisiones')
+              .update({ estado_pago: 'pagado' })
+              .in('id', selectedCommissions);
+
+          if (error) throw error;
+
+          Swal.fire({ title: 'Éxito', text: 'Comisiones liquidadas', icon: 'success', timer: 2000 });
+
+          setSelectedCommissions([]);
+          setSelectedComisionista(null);
+          fetchComisionistas(); // Para refrescar los datos
+      } catch (error) {
+          Swal.fire('Error', error.message, 'error');
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleSaveClient = async (clientData) => {
+        setLoading(true);
+        try {
+            const isEditing = !!clientToEdit;
+
+            const dataToSave = {
+                nombre: clientData.nombre,
+                cedula: clientData.cedula || null,
+                telefono: clientData.telefono,
+                direccion: clientData.direccion || null,
+                email: clientData.email || null,
+                estado: true
+            };
+
+            let error;
+
+            if (isEditing) {
+                const result = await supabase
+                    .from('clientes')
+                    .update(dataToSave)
+                    .eq('id', clientToEdit.id); 
+                error = result.error;
+            } else {
+                const result = await supabase
+                    .from('clientes')
+                    .insert([dataToSave]);
+                error = result.error;
+            }
+
+            if (error) throw error;
+
+            Swal.fire({
+                icon: 'success',
+                title: isEditing ? 'Cliente Actualizado' : 'Cliente Creado',
+                text: isEditing ? 'Los datos se actualizaron correctamente.' : 'El cliente ha sido guardado exitosamente.',
+                timer: 2000,
+                showConfirmButton: false
+            });
+
+            fetchClients();
+            setClientToEdit(null); 
+            setShowUserFormModal(false);
+            setFormMode(null);
+
+        } catch (error) {
+            console.error("Error de Supabase:", error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: error.message || 'Ocurrió un error inesperado.',
+            });
+        } finally {
+            setLoading(false);
+        }
   };
 
   const handleDeleteClient = (clientId) => {
@@ -185,6 +291,68 @@ const LoanAdminApp = () => {
         });
   };
 
+  const handleSaveComisionista = async (comisionistaData) => {
+      setLoading(true);
+      try {
+          const isEditing = !!clientToEdit; 
+
+          const dataToSave = {
+              nombre: comisionistaData.nombre,
+              cedula: comisionistaData.cedula || null,
+              telefono: comisionistaData.telefono,
+              email: comisionistaData.email || null,
+              estado: true 
+          };
+
+          let error;
+
+          if (isEditing) {
+              const result = await supabase
+                  .from('comisionistas')
+                  .update(dataToSave)
+                  .eq('id', clientToEdit.id);
+              error = result.error;
+          } else {
+              const result = await supabase
+                  .from('comisionistas')
+                  .insert([dataToSave]);
+              error = result.error;
+          }
+
+          if (error) throw error;
+          
+          Swal.fire({ 
+              title: 'Éxito', 
+              text: isEditing ? 'Comisionista actualizado correctamente.' : 'Comisionista guardado exitosamente.', 
+              icon: 'success', 
+              timer: 2000, 
+              showConfirmButton: false 
+          });
+
+          fetchClients();
+          fetchComisionistas();
+          setShowUserFormModal(false);
+          setFormMode(null);
+          setClientToEdit(null); 
+      } catch (error) {
+          console.error('Error guardando comisionista:', error);
+          Swal.fire({ 
+              title: 'Error', 
+              text: 'Error al procesar comisionista: ' + error.message, 
+              icon: 'error', 
+              confirmButtonText: 'Entendido' 
+          });
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleEditComisionista = (comisionista) => {
+      setClientToEdit(comisionista); 
+      setFormMode('comisionista');   
+      setShowUserFormModal(true);    
+  };
+
   const handleUpdateCapital = async (newAmount) => {
       try {
           const { data: configRow, error: fetchError } = await supabase
@@ -196,12 +364,12 @@ const LoanAdminApp = () => {
           if (fetchError) throw fetchError;
           
           if (configRow) {
-              const configId = configRow.id; // El UUID real
+              const configId = configRow.id; 
 
               const { error: updateError } = await supabase
                   .from('configuracion')
                   .update({ capital_invertido: newAmount })
-                  .eq('id', configId); // Usando el UUID para la actualización
+                  .eq('id', configId); 
 
               if (updateError) throw updateError;
               console.log('Capital actualizado correctamente (Update).');
@@ -378,13 +546,16 @@ const handlePaymentInputChange = (e) => {
                         : 0;
     const montoComision = monto * (porcentajeComision / 100) * numCiclos; 
     const interesNetoDueno = interesTotal - montoComision; 
-    
+    const fechaVen = new Date(fechaInicio);
+    fechaVen.setDate(fechaVen.getDate() + (numCiclos * 28));
+    const fechaVencimientoFormatted = fechaVen.toISOString().split('T')[0];
     return {
       interes: interesTotal.toFixed(2), 
       total: totalCliente.toFixed(2),   
       cuotaSemanal: cuotaSemanal.toFixed(2),
       montoComision: montoComision.toFixed(2),
-      interesNetoDueno: interesNetoDueno.toFixed(2)
+      interesNetoDueno: interesNetoDueno.toFixed(2),
+      fechaVencimiento: fechaVencimientoFormatted
     };
   };
 
@@ -429,8 +600,6 @@ const handlePaymentInputChange = (e) => {
 
     setLoading(true);
     try {
-      // const { total, fechaVencimiento } = calculateLoanDetails();
-      
       const loanDetails = calculateLoanDetails();
       const numCiclos = parseInt(loanFormData.plazo_dias) || 1;
       const plazoTotalDias = numCiclos * 28;
@@ -445,12 +614,10 @@ const handlePaymentInputChange = (e) => {
         fecha_vencimiento: loanDetails.fechaVencimiento,
         total_a_pagar: parseFloat(loanDetails.total),
         saldo_pendiente: parseFloat(loanDetails.total),
-        estado: 'activo',
-        comisionista_id: loanFormData.comisionista_id || null,
-        porcentaje_comision: parseFloat(loanFormData.porcentaje_comision) || 0
+        estado: 'activo'
       };
 
-      const { data, error } = await supabase
+      const { data: prestamoData, error } = await supabase
         .from('prestamos')
         .insert([loanData])
         .select();
@@ -458,26 +625,26 @@ const handlePaymentInputChange = (e) => {
       if (error) throw error;
 
       const prestamoId = prestamoData[0].id; 
-        const montoComision = parseFloat(loanDetails.montoComision);
+      const montoComision = parseFloat(loanDetails.montoComision);
         
-        if (loanFormData.comisionista_id && montoComision > 0) {
-            const comisionData = {
-                prestamo_id: prestamoId,
-                comisionista_id: loanFormData.comisionista_id,
-                monto_comision: montoComision,
-                porcentaje_aplicado: parseFloat(loanFormData.porcentaje_comision),
-                estado_pago: 'pendiente'
-            };
+      if (loanFormData.comisionista_id && montoComision > 0) {
+          const comisionData = {
+              prestamo_id: prestamoId,
+              comisionista_id: loanFormData.comisionista_id,
+              monto_comision: parseFloat(loanDetails.montoComision),
+              porcentaje_aplicado: parseFloat(loanFormData.porcentaje_comision),
+              estado_pago: 'pendiente'
+          };
 
-            const { error: comisionError } = await supabase
-                .from('registro_comisiones')
-                .insert([comisionData]);
+          const { error: comisionError } = await supabase
+              .from('registro_comisiones')
+              .insert([comisionData]);
 
-            if (comisionError) throw comisionError;
-        }
+          if (comisionError) throw comisionError;
+      }
       
       Swal.fire({ title: 'Éxito', text: 'Préstamo registrado exitosamente', icon: 'success', timer: 4000, showConfirmButton: false })
-
+      fetchComisionistas();
       setLoanFormData({
         cliente_id: '',
         monto_prestado: '',
@@ -633,7 +800,6 @@ const handleDeleteLoan = (loanToDelete) => {
   const activeLoans = loans.filter(l => l.estado === 'activo').length;
   const totalPrestado = loans.reduce((sum, l) => sum + (l.monto_prestado || 0), 0);
   const totalInteres = loans.reduce((sum, l) => sum + ((l.total_a_pagar || 0) - (l.monto_prestado || 0)), 0);
-  // const saldoDisponible = totalCapital - totalPrestado;
   const totalMontoInicialPrestado = loans.reduce((sum, l) => sum + (l.monto_prestado || 0), 0);
   const totalSaldoPendiente = loans.reduce((sum, l) => sum + (l.saldo_pendiente || 0), 0);
   const totalMontoCobrado = loans.reduce((sum, l) => {
@@ -739,89 +905,169 @@ const handleDeleteLoan = (loanToDelete) => {
       return (
             <div className="p-6 relative"> 
                 <h1 className="text-3xl font-bold text-gray-800 mb-6">Clientes Registrados</h1>
-
-                {/* --------------------------------------------------------- */}
-                {/* *** 1. BOTÓN DE ACCIÓN FLOTANTE (FAB) *** */}
-                {/* Este botón siempre es visible y llama a setShowClientForm(true) */}
-                {/* --------------------------------------------------------- */}
                 <button
-                    onClick={() => setShowClientForm(true)}
+                    onClick={() => {
+                        setShowUserFormModal(true);
+                        setFormMode(null);
+                    }}
                     className="fixed bottom-20 right-6 z-40 p-4 bg-green-600 text-white rounded-full shadow-2xl hover:bg-green-700 transition-all transform hover:scale-105"
-                    title="Nuevo Cliente"
+                    title="Nuevo Usuario"
                 >
-                    <Plus size={28} /> 
+                    <Plus size={28} /> 
                 </button>
                 
-                {!showClientForm && (
-                    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                        {loading ? (
-                            <div className="p-8 text-center text-gray-500">
-                                Cargando clientes...
-                            </div>
-                        ) : clients.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">
-                                <Users size={48} className="mx-auto text-gray-300 mb-4" />
-                                <p className="text-lg">No hay clientes registrados.</p>
-                                <p className="text-sm">Haz clic en el botón <Plus className="inline-block" size={16} /> para empezar a agregar.</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Nombre</th>
-                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Cédula</th>
-                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Teléfono</th>
-                                            <th className="px-6 py-3 text-left text-sm font-bold text-gray-700">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {clients.map((client) => (
-                                            <tr key={client.id} className="border-t hover:bg-gray-50">
-                                                
-                                                <td className="px-6 py-4 font-semibold text-gray-800">
-                                                    {client.nombre}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">
-                                                    {client.cedula}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">
-                                                    {client.telefono}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <button
-                                                        onClick={() => handleEditClient(client)}
-                                                        className="text-indigo-600 hover:text-indigo-800 mr-3"
-                                                        title="Editar Cliente"
-                                                    >
-                                                        <Eye size={18} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteClient(client.id)}
-                                                        className="text-red-600 hover:text-red-800"
-                                                        title="Eliminar Cliente"
-                                                    >
-                                                        <Trash2 size={18} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                {!showUserFormModal && (
+                    <>
+                        <div className="flex border-b border-gray-200 mb-6">
+                            <button
+                                onClick={() => setUserSubTab('clientsList')}
+                                className={`pb-3 px-4 font-semibold text-sm transition-colors ${
+                                    userSubTab === 'clientsList' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Clientes ({clients.length})
+                            </button>
+                            <button
+                                onClick={() => setUserSubTab('comisionistasList')}
+                                className={`pb-3 px-4 font-semibold text-sm transition-colors ${
+                                    userSubTab === 'comisionistasList' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Comisionistas ({comisionistas.length})
+                            </button>
+                        </div>
+
+                {userSubTab === 'clientsList' && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      {loading ? (
+                          <div className="p-8 text-center text-gray-500">Cargando...</div>
+                      ) : clients.length === 0 ? (
+                          <div className="p-8 text-center text-gray-500">
+                              <Users size={40} className="mx-auto text-gray-300 mb-2" />
+                              <p>No hay clientes.</p>
+                          </div>
+                      ) : (
+                          <div className="divide-y divide-gray-100">
+                              {clients.map((client) => (
+                                  <div key={client.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                                      {/* Info Principal: Avatar e Identidad */}
+                                      <div className="flex items-center gap-3 min-w-0">
+                                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                              <span className="text-blue-600 font-bold text-sm">
+                                                  {client.nombre.charAt(0).toUpperCase()}
+                                              </span>
+                                          </div>
+                                          <div className="min-w-0">
+                                              <p className="font-bold text-gray-900 truncate text-sm sm:text-base">
+                                                  {client.nombre}
+                                              </p>
+                                              <div className="text-xs text-gray-500 flex items-center gap-1">
+                                                  <Smartphone size={12} /> {client.telefono}
+                                              </div>
+                                          </div>
+                                      </div>
+
+                                      {/* Acciones Compactas */}
+                                      <div className="flex items-center gap-1 ml-2">
+                                          <button
+                                              onClick={() => handleEditClient(client)}
+                                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                                              title="Ver/Editar"
+                                          >
+                                              <Eye size={20} />
+                                          </button>
+                                          <button
+                                              onClick={() => handleDeleteClient(client.id)}
+                                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
+                                              title="Eliminar"
+                                          >
+                                              <Trash2 size={20} />
+                                          </button>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+              )}
+
+                {userSubTab === 'comisionistasList' && (
+                            <div className="bg-white rounded-2xl shadow-lg p-6">
+                                <p className="text-gray-500 mb-4">Solo se muestran comisionistas activos.</p>
+                                <div className="space-y-4">
+                                    {comisionistas.map((c) => (
+                                        <div key={c.id} className="flex justify-between items-center p-3 border-b hover:bg-gray-50 rounded-lg transition-colors">
+                                            <div>
+                                                <p className="font-semibold text-gray-800">{c.nombre}</p>
+                                                <p className="text-sm text-gray-500">Celular: {c.telefono}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleEditComisionista(c)} 
+                                                className="text-indigo-600 hover:text-indigo-800 mr-3"
+                                                title="Ver Detalle"
+                                            >
+                                                <Eye size={18} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                {comisionistas.length === 0 && (
+                                    <p className="text-center text-gray-500 py-4">No hay comisionistas activos.</p>
+                                )}
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
 
-                {showClientForm && (
-                    <ClientForm
-                        clientToEdit={clientToEdit}
-                        onSave={handleSaveClient} 
-                        onCancel={() => { 
-                            setShowClientForm(false); 
-                            setClientToEdit(null);
-                        }}
-                    />
+                {showUserFormModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                        <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+                            
+                            {formMode === null && (
+                                <div className="p-6 text-center">
+                                    <h2 className="text-2xl font-bold text-gray-800 mb-6">¿Qué deseas crear?</h2>
+                                    <div className="flex justify-center gap-6">
+                                        <button 
+                                            onClick={() => setFormMode('client')}
+                                            className="flex flex-col items-center justify-center p-6 w-1/2 bg-blue-100 text-blue-800 rounded-xl hover:bg-blue-200 transition-colors shadow-md"
+                                        >
+                                            <Users size={32} />
+                                            <span className="font-semibold mt-2">Nuevo Cliente</span>
+                                        </button>
+                                        <button 
+                                            onClick={() => setFormMode('comisionista')}
+                                            className="flex flex-col items-center justify-center p-6 w-1/2 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 transition-colors shadow-md"
+                                        >
+                                            <Percent size={32} />
+                                            <span className="font-semibold mt-2">Nuevo Comisionista</span>
+                                        </button>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowUserFormModal(false)}
+                                        className="mt-6 text-gray-500 hover:text-gray-700 text-sm"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            )}
+
+                            {formMode !== null && (
+                                <UserForm 
+                                    isComisionistaMode={formMode === 'comisionista'} 
+                                    clientToEdit={clientToEdit}
+                                    onSaveClient={handleSaveClient} 
+                                    onSaveComisionista={handleSaveComisionista}
+                                    loading={loading}
+                                    onCancel={() => {
+                                        setShowUserFormModal(false);
+                                        setClientToEdit(null);
+                                        setFormMode(null);
+                                    }}
+                                    onBackToSelection={() => setFormMode(null)} 
+                                />
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
       );
@@ -833,19 +1079,58 @@ const handleDeleteLoan = (loanToDelete) => {
               <h1 className="text-3xl font-bold text-gray-800">
                   {loanSubTab === 'loansList' ? 'Préstamos' : 'Comisiones'}
               </h1>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 {loanSubTab === 'loansList' && (
-                      <button
-                          onClick={() => setShowLoanForm(!showLoanForm)}
-                          disabled={loading}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
-                      >
-                          <Plus size={20} />
-                          {showLoanForm ? 'Cancelar' : 'Nuevo'}
-                      </button>
-                  )}
+                        <button
+                            onClick={() => {
+                                setShowSearch(!showSearch);
+                                if (showSearch) setSearchTerm(''); // Resetea el texto al cerrar
+                            }}
+                            className={`p-2 rounded-xl transition-all ${showSearch ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                            <Search size={22} />
+                        </button>
+                )}
+
+                {loanSubTab === 'loansList' && (
+                    <button
+                        onClick={() => setShowLoanForm(!showLoanForm)}
+                        disabled={loading}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                    >
+                        <Plus size={20} />
+                        {showLoanForm ? 'Cancelar' : 'Nuevo'}
+                    </button>
+                )}
               </div>
             </div>
+
+            {showSearch && loanSubTab === 'loansList' && !showLoanForm && (
+                <div className="mb-6 animate-in slide-in-from-top-2 duration-200">
+                    <div className="relative">
+                        <input
+                            key="search-input-loans" 
+                            type="text"
+                            placeholder="Escribe el nombre del cliente..."
+                            value={searchTerm}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                            }}
+                            className="w-full pl-12 pr-10 py-4 bg-white border-2 border-blue-100 rounded-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none shadow-sm text-gray-900"
+                        />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400" size={20} />
+                        
+                        {searchTerm && (
+                            <button 
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                            >
+                                <X size={18} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <div className="flex border-b border-gray-200 mb-6">
                 <button
@@ -946,11 +1231,11 @@ const handleDeleteLoan = (loanToDelete) => {
                         className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
                       >
                         <option value="">Selecciona (Opcional)</option>
-                        {comisionistas.map((comisionista) => ( 
-                          <option key={comisionista.id} value={comisionista.id}>
-                            {comisionista.nombre}
-                          </option>
-                        ))}
+                        {comisionistas.map((comisionista) => (
+                        <option key={comisionista.id} value={comisionista.id}>
+                          {comisionista.nombre}
+                        </option>
+                    ))}
                       </select>
                     </div>
 
@@ -1019,14 +1304,14 @@ const handleDeleteLoan = (loanToDelete) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {loans.length === 0 ? (
+                      {filteredLoans.length === 0 ? (
                         <tr>
                           <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
                             No hay préstamos registrados. Crea el primer préstamo.
                           </td>
                         </tr>
                       ) : (
-                        loans.map((loan) => {
+                        filteredLoans.map((loan) => {
                           const cuotaSemanal = loan.total_a_pagar / (loan.plazo_dias / 7);
                           const progresoPago = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
                           
@@ -1144,7 +1429,6 @@ const handleDeleteLoan = (loanToDelete) => {
                   </div>
 
                   <div className="p-6 space-y-6">
-                    {/* Grid de Información Principal */}
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
                         <div className="flex items-center gap-2 mb-2">
@@ -1289,6 +1573,21 @@ const handleDeleteLoan = (loanToDelete) => {
                         <span>Pagado: {formatCurrency(selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente)}</span>
                         <span>Pendiente: {formatCurrency(selectedLoan.saldo_pendiente)}</span>
                       </div>
+                      <div className="mt-4 pt-3 border-t border-gray-200">
+                        {(() => {
+                          const totalSemanas = selectedLoan.plazo_dias / 7;
+                          const valorCuota = selectedLoan.total_a_pagar / totalSemanas;
+                          const montoPagado = selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente;
+                          const cuotasPagadas = Math.floor(montoPagado / valorCuota);
+                          return (
+                            <div className="flex justify-center items-center gap-2">
+                              <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider">
+                                Lleva {cuotasPagadas} pagadas, de {totalSemanas} 
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
 
@@ -1317,31 +1616,182 @@ const handleDeleteLoan = (loanToDelete) => {
             )}
 
           {loanSubTab === 'commissions' && (
-                /* Contenido de Comisiones (Mover el contenido del antiguo case 'commissions' aquí) */
-                <div className="bg-white rounded-2xl shadow-lg p-6">
-                    {comisionistas.length === 0 ? (
-                        <p className="text-gray-500">No hay comisionistas registrados o no se han cargado.</p>
-                    ) : (
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">Comisiones Pendientes de Pago</h2>
-                            {comisionistas.map(c => (
-                                <div key={c.id} className="border-b py-3 flex justify-between items-center hover:bg-gray-50 px-2 rounded-lg">
-                                    <div>
-                                        <span className="font-semibold text-gray-800">{c.nombre}</span>
-                                        <p className="text-sm text-gray-500">{c.cedula}</p>
-                                    </div>
-                                    <button 
-                                        onClick={() => Swal.fire('Comisiones', `Lógica para pagar comisiones a ${c.nombre} aquí.`, 'info')}
-                                        className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-700 transition-colors"
-                                    >
-                                        Ver Detalle y Pagar
-                                    </button>
-                                </div>
-                            ))}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              {comisionistas.length === 0 ? (
+                <p className="text-gray-500">No hay comisionistas registrados o no se han cargado.</p>
+              ) : (
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                    <Percent className="text-emerald-600" size={24} />
+                    Comisiones Pendientes de Pago
+                  </h2>
+                  <div className="space-y-4">
+                    {comisionistas.map(c => {
+                      // Calculamos rápido el total que tiene pendiente este comisionista
+                      const totalPendiente = c.registro_comisiones
+                        ?.filter(r => r.estado_pago === 'pendiente')
+                        .reduce((acc, curr) => acc + curr.monto_comision, 0) || 0;
+
+                      return (
+                        <div key={c.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-gray-100 rounded-2xl hover:bg-slate-50 transition-colors gap-4">
+                          <div>
+                            <span className="font-bold text-gray-800 text-lg">{c.nombre}</span>
+                            <div className="flex gap-3 mt-1">
+                              <p className="text-xs text-gray-500">CC: {c.cedula}</p>
+                              <p className="text-xs font-bold text-emerald-600">Por cobrar: {formatCurrency(totalPendiente)}</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setSelectedComisionista(c);
+                              setSelectedCommissions([]); // Resetear selección al abrir
+                            }}
+                            className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Eye size={16} />
+                            Ver Detalle y Pagar
+                          </button>
                         </div>
-                    )}
+                      );
+                    })}
+                  </div>
                 </div>
-            )}
+              )}
+
+              {/* MODAL DE LIQUIDACIÓN (DENTRO DEL MISMO BLOQUE) */}
+              {selectedComisionista && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
+                  <div className="bg-white rounded-[32px] max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+                    
+                    {/* Cabecera del Modal */}
+                    <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-slate-50">
+                      <div>
+                        <h2 className="text-xl font-black text-slate-800">{selectedComisionista.nombre}</h2>
+                        <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Liquidación de Comisiones</p>
+                      </div>
+                      <button 
+                        onClick={() => { setSelectedComisionista(null); setSelectedCommissions([]); }}
+                        className="bg-white p-2 rounded-full shadow-sm border border-gray-100 text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        <X size={24} />
+                      </button>
+                    </div>
+
+                    {/* Lista de Comisiones (Pendientes primero, luego Pagadas) */}
+                    <div className="p-6 overflow-y-auto flex-1 bg-white">
+                      <div className="space-y-3">
+                        {selectedComisionista.registro_comisiones
+                          ?.sort((a, b) => {
+                            // Ordenar: 'pendiente' arriba, 'pagado' abajo
+                            if (a.estado_pago === 'pendiente' && b.estado_pago === 'pagado') return -1;
+                            if (a.estado_pago === 'pagado' && b.estado_pago === 'pendiente') return 1;
+                            return 0;
+                          })
+                          .map((reg) => {
+                            const isPagada = reg.estado_pago === 'pagado';
+                            const isSelected = selectedCommissions.includes(reg.id);
+
+                            return (
+                              <div 
+                                key={reg.id}
+                                onClick={() => {
+                                  // Si ya está pagada, no dejar seleccionar ni deseleccionar
+                                  if (isPagada) return;
+                                  
+                                  if (isSelected) {
+                                    setSelectedCommissions(selectedCommissions.filter(id => id !== reg.id));
+                                  } else {
+                                    setSelectedCommissions([...selectedCommissions, reg.id]);
+                                  }
+                                }}
+                                className={`group relative flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
+                                  isPagada 
+                                    ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed' // Estilo deshabilitado
+                                    : isSelected 
+                                      ? 'border-emerald-500 bg-emerald-50/50 shadow-sm cursor-pointer' 
+                                      : 'border-slate-100 bg-slate-50 hover:border-slate-200 cursor-pointer'
+                                }`}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                                    isPagada 
+                                      ? 'bg-gray-300 border-gray-300 text-white' 
+                                      : isSelected
+                                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                                        : 'bg-white border-slate-300'
+                                  }`}>
+                                    {isPagada ? <Check size={12} strokeWidth={4} /> : isSelected && <Check size={14} strokeWidth={4} />}
+                                  </div>
+                                  
+                                  <div>
+                                    <p className={`text-sm font-bold ${isPagada ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                      Cliente: {reg.prestamos?.clientes?.nombre || 'N/A'}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-[10px] text-slate-400 font-medium">
+                                        {formatCurrency(reg.prestamos?.monto_prestado || 0)}
+                                      </p>
+                                      {isPagada && (
+                                        <span className="text-[9px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase">
+                                          Pagada
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <p className={`text-sm font-black ${
+                                    isPagada ? 'text-slate-300' : isSelected ? 'text-emerald-600' : 'text-slate-600'
+                                  }`}>
+                                    {formatCurrency(reg.monto_comision)}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                        {/* Si realmente no hay nada en la tabla */}
+                        {(!selectedComisionista.registro_comisiones || selectedComisionista.registro_comisiones.length === 0) && (
+                          <div className="text-center py-12">
+                            <p className="text-slate-400 italic">No hay registros de comisiones.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer del Modal */}
+                    <div className="p-8 bg-slate-50 border-t border-gray-100">
+                      <div className="flex justify-between items-end mb-6">
+                        <div>
+                          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total seleccionado</p>
+                          <p className="text-3xl font-black text-slate-800">
+                            {formatCurrency(
+                              selectedComisionista.registro_comisiones
+                                ?.filter(r => selectedCommissions.includes(r.id))
+                                .reduce((acc, curr) => acc + curr.monto_comision, 0) || 0
+                            )}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-slate-500 text-xs font-bold">{selectedCommissions.length} ítem(s)</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handlePayCommissions}
+                        disabled={selectedCommissions.length === 0 || loading}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-emerald-200 transition-all active:scale-[0.98] flex justify-center items-center gap-3"
+                      >
+                        {loading ? <RefreshCw className="animate-spin" size={20} /> : <DollarSign size={22} />}
+                        Marcar como Pagadas
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           </div>
         );
 
@@ -1411,33 +1861,6 @@ const handleDeleteLoan = (loanToDelete) => {
           </div>
       );
 
-      case 'commissions': // <--- NUEVA PESTAÑA
-        return (
-          <div className="p-6">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Gestión de Comisiones</h1>
-            {comisionistas.length === 0 ? (
-              <p className="text-gray-500">No hay comisionistas registrados.</p>
-            ) : (
-              <div className="bg-white rounded-2xl p-6 shadow-lg">
-                  {/* Aquí se listarán los comisionistas y sus comisiones pendientes */}
-                  <h2 className="text-xl font-bold mb-4">Comisiones Pendientes de Pago</h2>
-                  
-                  {comisionistas.map(c => (
-                      <div key={c.id} className="border-b py-3 flex justify-between items-center">
-                          <span className="font-semibold">{c.nombre}</span>
-                          <button 
-                              onClick={() => Swal.fire('Comisiones', `Lógica para pagar comisiones a ${c.nombre} aquí.`, 'info')}
-                              className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm"
-                          >
-                              Ver Detalle y Pagar
-                          </button>
-                      </div>
-                  ))}
-              </div>
-            )}
-          </div>
-    );
-
       case 'settings':
         return (
             <SettingsPage
@@ -1484,7 +1907,7 @@ const handleDeleteLoan = (loanToDelete) => {
               }`}
             >
               <Users size={24} />
-              <span className="text-xs font-semibold">Clientes</span>
+              <span className="text-xs font-semibold">Usuarios</span>
             </button>
             <button
               onClick={() => setActiveTab('loans')}
