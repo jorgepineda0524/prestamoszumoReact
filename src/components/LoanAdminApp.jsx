@@ -58,7 +58,7 @@ const LoanAdminApp = () => {
     } else if (activeTab === 'home') {
       fetchClients();
       fetchLoans();
-    }
+    } 
 
     fetchTotalCapital();
     fetchComisionistas();
@@ -136,13 +136,12 @@ const LoanAdminApp = () => {
           const { data, error } = await supabase
               .from('prestamos')
               .select('*, clientes(nombre)') 
-              
               .eq('estado', 'activo') 
-              
               .order('fecha_inicio', { ascending: false });
 
           if (error) throw error;
           setLoans(data || []);
+          setActiveLoansList(data || []);
           
       } catch (error) {
           console.error("Error al cargar préstamos:", error);
@@ -523,20 +522,28 @@ const handlePaymentInputChange = (e) => {
   };
 
   const handleNavigateToPayment = (loanId) => {
+      const selectedLoan = loans.find(l => String(l.id) === String(loanId));
+      let montoSugerido = '';
+
+      if (selectedLoan) {
+          const totalSemanas = selectedLoan.plazo_dias / 7;
+          montoSugerido = Math.round(selectedLoan.total_a_pagar / totalSemanas);
+      }
+
       setActiveTab('payments');
-      setPaymentFormData(prevData => ({
-          ...prevData,
-          loan_id: loanId,
-          monto_pago: '', 
-      }));
-  };  
+      setPaymentFormData({
+          loan_id: String(loanId), 
+          monto_pago: montoSugerido.toString(),
+          fecha_pago: new Date().toISOString().split('T')[0],
+      });
+  }; 
 
   const calculateLoanDetails = () => {
     const monto = parseFloat(loanFormData.monto_prestado) || 0;
     const tasaTotal = parseFloat(loanFormData.tasa_interes) || 0;
     const porcentajeComision = parseFloat(loanFormData.porcentaje_comision) || 0; 
     const numCiclos = parseInt(loanFormData.plazo_dias) || 1; 
-    const DIAS_POR_CICLO = 28;
+    const fechaBase = loanFormData.fecha_prestamo || new Date().toISOString().split('T')[0];
     const SEMANAS_POR_CICLO = 4;
     const interesTotal = monto * (tasaTotal / 100) * numCiclos;
     const totalCliente = monto + interesTotal;
@@ -544,11 +551,13 @@ const handlePaymentInputChange = (e) => {
     const cuotaSemanal = (totalCliente > 0 && plazoTotalSemanas > 0) 
                         ? totalCliente / plazoTotalSemanas 
                         : 0;
+    const fechaObjeto = new Date(fechaBase + 'T00:00:00');
+    fechaObjeto.setDate(fechaObjeto.getDate() + (numCiclos * 28));
     const montoComision = monto * (porcentajeComision / 100) * numCiclos; 
     const interesNetoDueno = interesTotal - montoComision; 
-    const fechaVen = new Date(fechaInicio);
-    fechaVen.setDate(fechaVen.getDate() + (numCiclos * 28));
-    const fechaVencimientoFormatted = fechaVen.toISOString().split('T')[0];
+
+    // fechaVen.setDate(fechaVen.getDate() + (numCiclos * 28));
+    const fechaVencimientoFormatted = fechaObjeto.toISOString().split('T')[0];
     return {
       interes: interesTotal.toFixed(2), 
       total: totalCliente.toFixed(2),   
@@ -1616,175 +1625,167 @@ const handleDeleteLoan = (loanToDelete) => {
             )}
 
           {loanSubTab === 'commissions' && (
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              {comisionistas.length === 0 ? (
-                <p className="text-gray-500">No hay comisionistas registrados o no se han cargado.</p>
-              ) : (
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-                    <Percent className="text-emerald-600" size={24} />
-                    Comisiones Pendientes de Pago
-                  </h2>
-                  <div className="space-y-4">
-                    {comisionistas.map(c => {
-                      // Calculamos rápido el total que tiene pendiente este comisionista
-                      const totalPendiente = c.registro_comisiones
-                        ?.filter(r => r.estado_pago === 'pendiente')
-                        .reduce((acc, curr) => acc + curr.monto_comision, 0) || 0;
-
-                      return (
-                        <div key={c.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-gray-100 rounded-2xl hover:bg-slate-50 transition-colors gap-4">
-                          <div>
-                            <span className="font-bold text-gray-800 text-lg">{c.nombre}</span>
-                            <div className="flex gap-3 mt-1">
-                              <p className="text-xs text-gray-500">CC: {c.cedula}</p>
-                              <p className="text-xs font-bold text-emerald-600">Por cobrar: {formatCurrency(totalPendiente)}</p>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              setSelectedComisionista(c);
-                              setSelectedCommissions([]); // Resetear selección al abrir
-                            }}
-                            className="w-full sm:w-auto bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
-                          >
-                            <Eye size={16} />
-                            Ver Detalle y Pagar
-                          </button>
-                        </div>
-                      );
-                    })}
+            <div className="space-y-4">
+              {/* Encabezado informativo corto */}
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-emerald-500 p-2 rounded-xl text-white">
+                    <Percent size={20} />
                   </div>
+                  <div>
+                    <p className="text-xs text-emerald-700 font-bold uppercase tracking-wider">Resumen de Deuda</p>
+                    <p className="text-xl font-black text-emerald-800">
+                      {formatCurrency(comisionistas.reduce((acc, c) => 
+                        acc + (c.registro_comisiones?.filter(r => r.estado_pago === 'pendiente')
+                        .reduce((a, b) => a + b.monto_comision, 0) || 0), 0
+                      ))}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {comisionistas.length === 0 ? (
+                <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-slate-200">
+                  <p className="text-slate-400 font-medium">No hay comisionistas para mostrar.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {comisionistas.map(c => {
+                    const pendientes = c.registro_comisiones?.filter(r => r.estado_pago === 'pendiente') || [];
+                    const totalC = pendientes.reduce((acc, curr) => acc + curr.monto_comision, 0);
+
+                    return (
+                      <div key={c.id} className="bg-white border border-slate-100 rounded-2xl p-3 flex items-center justify-between hover:border-blue-300 transition-all shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-slate-50 flex flex-col items-center justify-center border border-slate-100">
+                            <span className="text-[10px] font-bold text-slate-400 leading-none mb-1">CANT</span>
+                            <span className="text-sm font-black text-slate-700 leading-none">{pendientes.length}</span>
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-slate-800 text-sm">{c.nombre}</h3>
+                            <p className="text-emerald-600 font-black text-sm">{formatCurrency(totalC)}</p>
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => {
+                            setSelectedComisionista(c);
+                            setSelectedCommissions([]);
+                          }}
+                          className="bg-slate-50 hover:bg-blue-600 hover:text-white text-slate-500 p-3 rounded-xl transition-all active:scale-90"
+                        >
+                          <Eye size={18} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              {/* MODAL DE LIQUIDACIÓN (DENTRO DEL MISMO BLOQUE) */}
+              {/* MODAL LATERAL DE DETALLE DE COMISIONES */}
               {selectedComisionista && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
-                  <div className="bg-white rounded-[32px] max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-end z-[100] animate-in fade-in duration-300">
+                  <div className="bg-white h-full w-full max-w-md shadow-2xl flex flex-col animate-in slide-in-from-right duration-500 rounded-l-[40px] overflow-hidden">
                     
-                    {/* Cabecera del Modal */}
-                    <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-slate-50">
-                      <div>
-                        <h2 className="text-xl font-black text-slate-800">{selectedComisionista.nombre}</h2>
-                        <p className="text-slate-500 text-xs font-medium uppercase tracking-widest">Liquidación de Comisiones</p>
+                    {/* Header Estilizado */}
+                    <div className="p-8 pb-6 border-b border-slate-50 bg-white">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-200">
+                          <UserCheck size={24} />
+                        </div>
+                        <button 
+                          onClick={() => { setSelectedComisionista(null); setSelectedCommissions([]); }}
+                          className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+                        >
+                          <X size={24} />
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => { setSelectedComisionista(null); setSelectedCommissions([]); }}
-                        className="bg-white p-2 rounded-full shadow-sm border border-gray-100 text-slate-400 hover:text-red-500 transition-colors"
-                      >
-                        <X size={24} />
-                      </button>
+                      <h2 className="text-2xl font-black text-slate-800 tracking-tight">{selectedComisionista.nombre}</h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-bold uppercase tracking-widest">
+                          CC: {selectedComisionista.cedula}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Lista de Comisiones (Pendientes primero, luego Pagadas) */}
-                    <div className="p-6 overflow-y-auto flex-1 bg-white">
-                      <div className="space-y-3">
-                        {selectedComisionista.registro_comisiones
-                          ?.sort((a, b) => {
-                            // Ordenar: 'pendiente' arriba, 'pagado' abajo
-                            if (a.estado_pago === 'pendiente' && b.estado_pago === 'pagado') return -1;
-                            if (a.estado_pago === 'pagado' && b.estado_pago === 'pendiente') return 1;
-                            return 0;
-                          })
-                          .map((reg) => {
-                            const isPagada = reg.estado_pago === 'pagado';
-                            const isSelected = selectedCommissions.includes(reg.id);
+                    {/* Lista de Comisiones con scroll suave */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-2">Historial de comisiones</p>
+                      
+                      {selectedComisionista.registro_comisiones
+                        ?.sort((a, b) => (a.estado_pago === 'pendiente' ? -1 : 1))
+                        .map((reg) => {
+                          const isPagada = reg.estado_pago === 'pagado';
+                          const isSelected = selectedCommissions.includes(reg.id);
 
-                            return (
-                              <div 
-                                key={reg.id}
-                                onClick={() => {
-                                  // Si ya está pagada, no dejar seleccionar ni deseleccionar
-                                  if (isPagada) return;
-                                  
-                                  if (isSelected) {
-                                    setSelectedCommissions(selectedCommissions.filter(id => id !== reg.id));
-                                  } else {
-                                    setSelectedCommissions([...selectedCommissions, reg.id]);
-                                  }
-                                }}
-                                className={`group relative flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${
-                                  isPagada 
-                                    ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed' // Estilo deshabilitado
-                                    : isSelected 
-                                      ? 'border-emerald-500 bg-emerald-50/50 shadow-sm cursor-pointer' 
-                                      : 'border-slate-100 bg-slate-50 hover:border-slate-200 cursor-pointer'
-                                }`}
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    isPagada 
-                                      ? 'bg-gray-300 border-gray-300 text-white' 
-                                      : isSelected
-                                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                                        : 'bg-white border-slate-300'
-                                  }`}>
-                                    {isPagada ? <Check size={12} strokeWidth={4} /> : isSelected && <Check size={14} strokeWidth={4} />}
-                                  </div>
-                                  
-                                  <div>
-                                    <p className={`text-sm font-bold ${isPagada ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                                      Cliente: {reg.prestamos?.clientes?.nombre || 'N/A'}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-[10px] text-slate-400 font-medium">
-                                        {formatCurrency(reg.prestamos?.monto_prestado || 0)}
-                                      </p>
-                                      {isPagada && (
-                                        <span className="text-[9px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-bold uppercase">
-                                          Pagada
-                                        </span>
-                                      )}
+                          return (
+                            <div 
+                              key={reg.id}
+                              onClick={() => !isPagada && (isSelected 
+                                ? setSelectedCommissions(prev => prev.filter(id => id !== reg.id)) 
+                                : setSelectedCommissions(prev => [...prev, reg.id]))}
+                              className={`group relative p-5 rounded-[24px] border-2 transition-all duration-300 ${
+                                isPagada 
+                                  ? 'bg-white/50 border-transparent opacity-60 grayscale' 
+                                  : isSelected 
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100 scale-[1.02]' 
+                                    : 'bg-white border-white hover:border-blue-200 cursor-pointer shadow-sm hover:shadow-md'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-start gap-3">
+                                  {!isPagada && (
+                                    <div className={`mt-1 w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                      isSelected ? 'bg-white border-white text-blue-600' : 'bg-slate-50 border-slate-200'
+                                    }`}>
+                                      {isSelected && <Check size={12} strokeWidth={4} />}
                                     </div>
+                                  )}
+                                  <div>
+                                    <p className={`text-sm font-bold leading-tight ${isSelected ? 'text-white' : 'text-slate-800'}`}>
+                                      {reg.prestamos?.clientes?.nombre || 'Cliente Final'}
+                                    </p>
+                                    <p className={`text-[10px] font-medium mt-1 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                                      Monto Préstamo: {formatCurrency(reg.prestamos?.monto_prestado || 0)}
+                                    </p>
                                   </div>
                                 </div>
-
                                 <div className="text-right">
-                                  <p className={`text-sm font-black ${
-                                    isPagada ? 'text-slate-300' : isSelected ? 'text-emerald-600' : 'text-slate-600'
-                                  }`}>
+                                  <p className={`text-base font-black ${isSelected ? 'text-white' : 'text-blue-600'}`}>
                                     {formatCurrency(reg.monto_comision)}
                                   </p>
+                                  {isPagada && (
+                                    <span className="text-[9px] font-black uppercase text-emerald-500 mt-1 block">Liquidado</span>
+                                  )}
                                 </div>
                               </div>
-                            );
-                          })}
-
-                        {/* Si realmente no hay nada en la tabla */}
-                        {(!selectedComisionista.registro_comisiones || selectedComisionista.registro_comisiones.length === 0) && (
-                          <div className="text-center py-12">
-                            <p className="text-slate-400 italic">No hay registros de comisiones.</p>
-                          </div>
-                        )}
-                      </div>
+                            </div>
+                          );
+                        })}
                     </div>
 
-                    {/* Footer del Modal */}
-                    <div className="p-8 bg-slate-50 border-t border-gray-100">
-                      <div className="flex justify-between items-end mb-6">
+                    {/* Footer / Resumen de Pago */}
+                    <div className="p-8 bg-white border-t border-slate-100">
+                      <div className="flex justify-between items-center mb-6 px-2">
                         <div>
-                          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total seleccionado</p>
-                          <p className="text-3xl font-black text-slate-800">
-                            {formatCurrency(
-                              selectedComisionista.registro_comisiones
-                                ?.filter(r => selectedCommissions.includes(r.id))
-                                .reduce((acc, curr) => acc + curr.monto_comision, 0) || 0
-                            )}
+                          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total a pagar</p>
+                          <p className="text-3xl font-black text-slate-900">
+                            {formatCurrency(selectedComisionista.registro_comisiones?.filter(r => selectedCommissions.includes(r.id)).reduce((acc, curr) => acc + curr.monto_comision, 0) || 0)}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-slate-500 text-xs font-bold">{selectedCommissions.length} ítem(s)</p>
+                          <span className="text-[10px] font-bold text-slate-400 block uppercase">Items</span>
+                          <span className="text-lg font-black text-blue-600">{selectedCommissions.length}</span>
                         </div>
                       </div>
 
                       <button
                         onClick={handlePayCommissions}
                         disabled={selectedCommissions.length === 0 || loading}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-lg shadow-xl shadow-emerald-200 transition-all active:scale-[0.98] flex justify-center items-center gap-3"
+                        className="w-full bg-slate-900 text-white py-5 rounded-[20px] font-bold text-lg hover:bg-blue-600 disabled:bg-slate-100 disabled:text-slate-300 transition-all flex justify-center items-center gap-3 shadow-2xl shadow-slate-200 active:scale-95"
                       >
-                        {loading ? <RefreshCw className="animate-spin" size={20} /> : <DollarSign size={22} />}
-                        Marcar como Pagadas
+                        {loading ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={22} />}
+                        Confirmar Pago
                       </button>
                     </div>
                   </div>
@@ -1808,33 +1809,42 @@ const handleDeleteLoan = (loanToDelete) => {
 
                   <div className="space-y-4">
                       <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">Seleccionar Préstamo</label>
-                          <select
-                              name="loan_id"
-                              value={paymentFormData.loan_id}
-                              onChange={handlePaymentInputChange} 
-                              disabled={loading}
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                          >
-                              <option value="">Buscar préstamo...</option>
-                              {activeLoansList.map((loan) => (
-                                  <option key={loan.id} value={loan.id}>
-                                      {loan.clientes?.nombre} - Saldo: {formatCurrency(loan.saldo_pendiente)}
-                                  </option>
-                              ))} 
-                          </select>
+                          <label className="block text-sm font-medium text-gray-700">Seleccionar Préstamo</label>
+                        <select
+                            name="loan_id"
+                            value={paymentFormData.loan_id || ""} // Asegura que no sea undefined
+                            onChange={handlePaymentInputChange}
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-gray-800"
+                        >
+                            <option value="">-- Seleccione un cliente activo --</option>
+                            
+                            {/* Usamos loans directamente si activeLoansList falla */}
+                            {(activeLoansList.length > 0 ? activeLoansList : loans).map((loan) => (
+                                <option key={loan.id} value={loan.id}>
+                                    {loan.clientes?.nombre} (Saldo: ${loan.saldo_pendiente?.toLocaleString()})
+                                </option>
+                            ))}
+                        </select>
+                        {(activeLoansList.length === 0 && loans.length === 0) && (
+                            <p className="text-red-500 text-xs mt-1 italic">No se encontraron préstamos activos en la base de datos.</p>
+                        )}
                       </div>
-                      <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">Monto a Pagar (COP)</label>
-                          <input
-                              type="text" 
-                              name="monto_pago"
-                              value={formatInputCurrency(paymentFormData.monto_pago)} 
-                              onChange={handlePaymentInputChange}
-                              disabled={loading}
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                              placeholder="Ej: $ 50.000"
-                          />
+                      <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700">Monto a Pagar</label>
+                          <div className="relative">
+                              <span className="absolute left-4 top-3.5 text-gray-500 font-bold">$</span>
+                              <input
+                                  type="number"
+                                  name="monto_pago"
+                                  placeholder="0.00"
+                                  value={paymentFormData.monto_pago}
+                                  onChange={handlePaymentInputChange}
+                                  className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none"
+                              />
+                          </div>
+                          <p className="text-xs text-gray-400 italic">
+                              * Se ha sugerido el valor de la cuota programada.
+                          </p>
                       </div>
                       
                       <div>
