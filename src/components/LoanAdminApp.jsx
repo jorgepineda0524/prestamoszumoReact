@@ -710,72 +710,73 @@ const LoanAdminApp = () => {
   };
 
   const handleDeleteLoan = (loanToDelete) => {
-    const montoPrestado = loanToDelete.monto_prestado;
+    // 1. Extraemos los datos correctamente (usando la relación de Supabase para el nombre)
+    const montoPrestado = parseFloat(loanToDelete.monto_prestado) || 0;
+    const nombreCliente = loanToDelete.clientes?.nombre || 'este cliente';
+
     Swal.fire({
-      title: '¿Eliminar Préstamo?',
+      title: '¿ELIMINAR PRÉSTAMO?',
       html: `
-              <p>El préstamo a ${loanToDelete.cliente_nombre} será desactivado. 
-              El monto de ${formatCurrency(montoPrestado)} será reintegrado al capital disponible.</p>
-              <p class="mt-2 font-semibold text-red-600">Esta acción no se puede deshacer.</p>
-          `,
+        <div className="text-center">
+          <p className="text-slate-600">El préstamo de <b className="text-slate-900">${nombreCliente}</b> será desactivado.</p>
+          <p className="mt-2 text-blue-600 font-black">SE REINTEGRARÁN: ${formatCurrency(montoPrestado)}</p>
+          <p className="mt-4 text-[10px] font-bold text-rose-500 uppercase tracking-widest">Esta acción liberará el capital de inmediato</p>
+        </div>
+      `,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Sí, Eliminar y Reintegrar',
-      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#1e293b', // Color Slate-900 (Apex Dark)
+      cancelButtonColor: '#f43f5e',  // Color Rose-500
+      confirmButtonText: 'SÍ, ELIMINAR',
+      cancelButtonText: 'CANCELAR',
       reverseButtons: true,
       customClass: {
-        popup: 'rounded-xl shadow-2xl',
-        confirmButton: 'font-semibold px-4 py-2',
-        cancelButton: 'font-semibold px-4 py-2'
+        popup: 'rounded-[2.5rem] border-none shadow-2xl',
+        confirmButton: 'rounded-2xl font-black uppercase text-xs tracking-widest px-6 py-4',
+        cancelButton: 'rounded-2xl font-black uppercase text-xs tracking-widest px-6 py-4'
       }
     }).then(async (result) => {
-
       if (result.isConfirmed) {
+        setLoading(true); // Usamos tu estado global de carga
 
-        let loadingToast;
         try {
-          loadingToast = Swal.fire({
-            title: 'Procesando...',
-            text: 'Eliminando préstamo y reintegrando capital. Por favor, espere.',
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: () => {
-              Swal.showLoading()
-            }
-          });
+          // 2. Desactivamos el préstamo en la base de datos
+          // Al pasar a 'inactivo', tus cálculos de "Saldo Disponible" 
+          // se actualizarán automáticamente al refrescar.
           const { error: loanError } = await supabase
             .from('prestamos')
             .update({ estado: 'inactivo' })
             .eq('id', loanToDelete.id);
 
           if (loanError) throw loanError;
-          const nuevoCapitalDisponible = capitalDisponible + montoPrestado;
 
-          const { error: configError } = await supabase
-            .from('configuracion_capital')
-            .update({ capital_disponible: nuevoCapitalDisponible })
-            .eq('id', 1);
-
-          if (configError) throw configError;
-
-          loadingToast.close();
-
+          // 3. Alerta de éxito con el nuevo diseño
           Swal.fire({
-            title: '¡Eliminado y Reintegrado!',
-            html: `El préstamo ha sido desactivado y **${formatCurrency(montoPrestado)}** ha sido reintegrado al capital.`,
+            title: '¡OPERACIÓN EXITOSA!',
+            html: `<p className="text-sm font-bold text-slate-500 uppercase">El capital de ${formatCurrency(montoPrestado)} ha sido reintegrado.</p>`,
             icon: 'success',
-            confirmButtonColor: '#10b981',
+            confirmButtonColor: '#2563eb',
+            customClass: {
+              popup: 'rounded-[2.5rem]',
+              confirmButton: 'rounded-2xl font-black uppercase text-xs tracking-widest px-8 py-4'
+            }
           });
 
-          fetchLoans();
-          fetchCapitalConfig();
+          // 4. Refrescamos los datos para que el Home y las Listas se actualicen
+          if (typeof fetchLoans === 'function') fetchLoans();
+          if (typeof fetchTotalCapital === 'function') fetchTotalCapital(); // Ajustado al nombre real de tu función
 
         } catch (error) {
-          loadingToast.close();
-          console.error('Error al eliminar préstamo y reintegrar capital:', error);
-          Swal.fire('Error', `Ocurrió un error al procesar la eliminación: ${error.message}`, 'error');
+          console.error('Error al eliminar préstamo:', error);
+          Swal.fire({
+            title: 'ERROR',
+            text: `No se pudo procesar: ${error.message}`,
+            icon: 'error',
+            confirmButtonColor: '#ef4444',
+            customClass: { popup: 'rounded-[2rem]' }
+          });
+        } finally {
+          setLoading(false);
         }
       }
     });
