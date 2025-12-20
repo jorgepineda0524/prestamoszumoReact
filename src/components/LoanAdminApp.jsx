@@ -859,93 +859,114 @@ const LoanAdminApp = () => {
     switch (activeTab) {
       case 'home':
         return (
-          <div className="p-6">
-            <div className="mb-8 bg-gradient-to-b from-slate-50 to-transparent p-4 rounded-3xl border-b border-slate-100">
-              <div className="flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles size={18} className="text-blue-500 animate-pulse" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Sistema Central</span>
+          <div className="p-6 space-y-8 pb-24">
+            {/* 1. Encabezado de Bienvenida Estilo APEX */}
+            <div className="flex flex-col items-center mb-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={18} className="text-blue-500 animate-pulse" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Dashboard Principal</span>
+              </div>
+              <h1 className="text-4xl font-black text-slate-800 tracking-tighter uppercase italic leading-none text-center">
+                APEX <span className="text-blue-600">FINANCE</span>
+              </h1>
+              <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-4 rounded-full shadow-lg shadow-blue-100"></div>
+            </div>
+
+            {/* 2. Grid de Estadísticas Principales */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Préstamos Activos */}
+              <div className="bg-white border border-slate-100 p-5 rounded-[2.5rem] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="absolute -right-2 -top-2 bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <FileText size={24} className="text-blue-600 opacity-20" />
                 </div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 relative z-10">Activos</p>
+                <p className="text-4xl font-black text-slate-800 italic relative z-10">{activeLoans}</p>
+                <p className="text-[9px] font-bold text-blue-600 uppercase mt-2">Créditos vigentes</p>
+              </div>
 
-                <h1 className="text-4xl sm:text-5xl font-black text-slate-800 tracking-tighter uppercase italic leading-none">
-                  APEX{' '}
-                  <span className="text-blue-600">
-                    FINANCE
-                  </span>
-                </h1>
-
-                {/* La línea decorativa igual a la del formulario */}
-                <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-4 rounded-full shadow-lg shadow-blue-100"></div>
+              {/* Total Clientes */}
+              <div className="bg-white border border-slate-100 p-5 rounded-[2.5rem] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="absolute -right-2 -top-2 bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Users size={24} className="text-emerald-600 opacity-20" />
+                </div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 relative z-10">Clientes</p>
+                <p className="text-4xl font-black text-slate-800 italic relative z-10">{clients.length}</p>
+                <p className="text-[9px] font-bold text-emerald-600 uppercase mt-2">Registrados</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-6 text-white shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100 text-lg mb-1">Préstamos Activos</p>
-                    <p className="text-4xl font-bold">{activeLoans}</p>
+            {/* 3. Tarjeta de Capital Grande (Estilo Dark Ajustes) */}
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden border border-white/5">
+              <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-blue-600/20 rounded-full blur-[80px]"></div>
+
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-white/10 p-2.5 rounded-2xl backdrop-blur-md">
+                    <DollarSign size={24} className="text-cyan-400" />
                   </div>
-                  <FileText size={48} className="opacity-80" />
+                  <p className="text-cyan-100 text-xs font-black uppercase tracking-widest leading-none">Capital Prestado</p>
+                </div>
+
+                <p className="text-4xl sm:text-5xl font-black tracking-tighter mb-8 italic">
+                  {formatCurrency(totalPrestado)}
+                </p>
+
+                <div className="grid grid-cols-1 gap-4 pt-6 border-t border-white/10">
+                  <div className="flex justify-between items-center px-2">
+                    <div>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1 text-left">Intereses Totales</p>
+                      <p className="text-xl font-black text-orange-400 italic">{formatCurrency(totalInteres)}</p>
+                    </div>
+                    <TrendingUp size={32} className="text-orange-400/20" />
+                  </div>
                 </div>
               </div>
-
-              <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-emerald-100 text-lg mb-1">Total Clientes</p>
-                    <p className="text-4xl font-bold">{clients.length}</p>
-                  </div>
-                  <Users size={48} className="opacity-80" />
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-rose-400 to-rose-500 rounded-2xl p-6 text-white shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-rose-100 text-lg mb-1">Capital Prestado</p>
-                    <p className="text-3xl font-bold">{formatCurrency(totalPrestado)}</p>
-                  </div>
-                  <DollarSign size={48} className="opacity-80" />
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl p-6 text-white shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-amber-100 text-lg mb-1">Intereses Total</p>
-                    <p className="text-3xl font-bold">{formatCurrency(totalInteres)}</p>
-                  </div>
-                  <TrendingUp size={48} className="opacity-80" />
-                </div>
-              </div>
-
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-md">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Préstamos Recientes</h2>
+            {/* 4. Lista de Préstamos Recientes Estilizada */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-2">
+                <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">Actividad Reciente</h2>
+                <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-1 rounded-lg">Top 5</span>
+              </div>
+
               <div className="space-y-3">
                 {loans.slice(0, 5).map((loan) => (
-                  <div key={loan.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <DollarSign size={20} className="text-blue-600" />
+                  <div key={loan.id} className="bg-white border border-slate-100 p-4 rounded-[1.8rem] flex items-center justify-between shadow-sm group active:scale-95 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:bg-blue-600 transition-colors group-hover:border-blue-600">
+                        <DollarSign size={20} className="text-slate-400 group-hover:text-white transition-colors" />
                       </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{loan.clientes?.nombre}</p>
-                        <p className="text-sm text-gray-500">{formatCurrency(loan.monto_prestado)} • {loan.modalidad}</p>
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-800 text-sm truncate uppercase tracking-tight">{loan.clientes?.nombre}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                          {formatCurrency(loan.monto_prestado)} • <span className="text-blue-500">{loan.modalidad}</span>
+                        </p>
                       </div>
                     </div>
+
                     <div className="text-right">
-                      <p className="font-bold text-green-600">{formatCurrency(loan.total_a_pagar)}</p>
-                      <p className="text-xs text-gray-500">{loan.estado}</p>
+                      <p className="font-black text-emerald-600 text-sm italic">{formatCurrency(loan.total_a_pagar)}</p>
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <p className="text-[8px] font-black text-slate-400 uppercase">{loan.estado}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
+
                 {loans.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">No hay préstamos registrados</p>
+                  <div className="bg-slate-50 border border-dashed border-slate-200 rounded-[2rem] p-10 text-center">
+                    <RefreshCw size={32} className="mx-auto text-slate-300 mb-2 animate-spin-slow" />
+                    <p className="text-slate-400 text-xs font-bold uppercase">Sin movimientos hoy</p>
+                  </div>
                 )}
               </div>
+            </div>
+
+            {/* Footer sutil */}
+            <div className="text-center pt-4 opacity-30">
+              <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.4em]">Control de Activos v2.0</p>
             </div>
           </div>
         );
@@ -1676,50 +1697,50 @@ const LoanAdminApp = () => {
             {renderContent()}
           </div>
 
-          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-[100]">
-            <div className="max-w-7xl mx-auto px-4">
-              <div className="flex justify-around items-center h-20">
-                <button
-                  onClick={() => setActiveTab('home')}
-                  className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${activeTab === 'home' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                  <Home size={24} />
-                  <span className="text-xs font-semibold">Inicio</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('clients')}
-                  className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${activeTab === 'clients' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                  <Users size={24} />
-                  <span className="text-xs font-semibold">Usuarios</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('loans')}
-                  className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${activeTab === 'loans' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                  <DollarSign size={24} />
-                  <span className="text-xs font-semibold">Préstamos</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('payments')}
-                  className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${activeTab === 'payments' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                  <Receipt size={24} />
-                  <span className="text-xs font-semibold">Pagos</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('settings')}
-                  className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${activeTab === 'settings' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                  <Settings size={24} />
-                  <span className="text-xs font-semibold">Ajustes</span>
-                </button>
-              </div>
+          <nav className="fixed bottom-0 left-0 right-0 z-[120] bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe">
+            <div className="max-w-md mx-auto flex justify-around items-center h-20 px-2 relative">
+
+              {[
+                { id: 'home', icon: Home, label: 'Inicio', color: 'text-blue-600', bg: 'bg-blue-50' },
+                { id: 'clients', icon: Users, label: 'Usuarios', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                { id: 'loans', icon: DollarSign, label: 'Créditos', color: 'text-violet-600', bg: 'bg-violet-50' },
+                { id: 'payments', icon: Receipt, label: 'Caja', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { id: 'settings', icon: Settings, label: 'Ajustes', color: 'text-slate-800', bg: 'bg-slate-100' }
+              ].map((tab) => {
+                const IsActive = activeTab === tab.id;
+                const IconComponent = tab.icon;
+
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className="relative flex flex-col items-center justify-center flex-1 h-full transition-all duration-300"
+                  >
+                    {/* Bloque de Fondo Activo */}
+                    <div className={`absolute inset-y-2 inset-x-1 rounded-2xl transition-all duration-300 ${IsActive ? `${tab.bg} opacity-100 scale-100` : 'bg-transparent opacity-0 scale-95'
+                      }`} />
+
+                    {/* Contenedor de Icono y Texto */}
+                    <div className={`relative z-10 flex flex-col items-center gap-1 transition-transform duration-300 ${IsActive ? 'scale-105' : 'scale-100'
+                      }`}>
+                      <IconComponent
+                        size={22}
+                        strokeWidth={IsActive ? 3 : 2}
+                        className={IsActive ? tab.color : 'text-slate-400'}
+                      />
+
+                      <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${IsActive ? tab.color : 'text-slate-400'
+                        }`}>
+                        {tab.label}
+                      </span>
+                    </div>
+
+                    {/* Barrita indicadora superior */}
+                    <div className={`absolute top-0 w-8 h-1 rounded-b-full transition-all duration-500 ${IsActive ? `${tab.bg.replace('50', '600')} opacity-100` : 'opacity-0'
+                      }`} />
+                  </button>
+                );
+              })}
             </div>
           </nav>
         </>
