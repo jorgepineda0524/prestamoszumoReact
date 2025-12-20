@@ -473,6 +473,16 @@ const LoanAdminApp = () => {
     }));
   };
 
+  const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const diaHoy = diasSemana[new Date().getDay()];
+
+  const pagosHoy = loans.filter(loan => {
+    if (loan.estado !== 'activo') return false;
+    const modalidad = loan.modalidad?.toLowerCase();
+    if (modalidad.includes('semanal')) return true;
+    return loan.dia_pago?.toLowerCase() === diaHoy;
+  });
+
   const formatInputCurrency = (amount) => {
     if (!amount || isNaN(parseFloat(amount))) return '';
     return new Intl.NumberFormat('es-CO', {
@@ -924,42 +934,68 @@ const LoanAdminApp = () => {
               </div>
             </div>
 
-            {/* 4. Lista de Préstamos Recientes Estilizada */}
+            {/* 4. COBROS DE HOY */}
             <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">Actividad Reciente</h2>
-                <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-1 rounded-lg">Top 5</span>
+                <div className="flex flex-col">
+                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">Cobros de Hoy</h2>
+                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter">
+                    {diaHoy}, {new Date().toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-[10px] font-black italic shadow-lg shadow-blue-200">
+                  {pagosHoy.length} PENDIENTES
+                </div>
               </div>
 
               <div className="space-y-3">
-                {loans.slice(0, 5).map((loan) => (
-                  <div key={loan.id} className="bg-white border border-slate-100 p-4 rounded-[1.8rem] flex items-center justify-between shadow-sm group active:scale-95 transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:bg-blue-600 transition-colors group-hover:border-blue-600">
-                        <DollarSign size={20} className="text-slate-400 group-hover:text-white transition-colors" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-slate-800 text-sm truncate uppercase tracking-tight">{loan.clientes?.nombre}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                          {formatCurrency(loan.monto_prestado)} • <span className="text-blue-500">{loan.modalidad}</span>
-                        </p>
-                      </div>
-                    </div>
+                {pagosHoy.length > 0 ? (
+                  pagosHoy.map((loan) => (
+                    <div key={loan.id} className="bg-white border border-slate-100 p-5 rounded-[2.2rem] flex items-center justify-between shadow-sm group active:scale-95 transition-all">
+                      <div className="flex items-center gap-4">
+                        {/* Indicador de estado de pago */}
+                        <div className="relative">
+                          <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:bg-blue-600 transition-colors">
+                            <Clock size={24} className="text-slate-400 group-hover:text-white transition-colors" />
+                          </div>
+                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 border-4 border-white rounded-full"></div>
+                        </div>
 
-                    <div className="text-right">
-                      <p className="font-black text-emerald-600 text-sm italic">{formatCurrency(loan.total_a_pagar)}</p>
-                      <div className="flex items-center justify-end gap-1 mt-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase">{loan.estado}</p>
+                        <div className="min-w-0">
+                          <p className="font-black text-slate-800 text-base truncate uppercase tracking-tight leading-none mb-1">
+                            {loan.clientes?.nombre}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md uppercase">
+                              {loan.modalidad}
+                            </span>
+                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tighter">
+                              Cuota: <span className="text-slate-900">{formatCurrency(loan.cuota_monto || (loan.total_a_pagar / loan.numero_cuotas))}</span>
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
 
-                {loans.length === 0 && (
-                  <div className="bg-slate-50 border border-dashed border-slate-200 rounded-[2rem] p-10 text-center">
-                    <RefreshCw size={32} className="mx-auto text-slate-300 mb-2 animate-spin-slow" />
-                    <p className="text-slate-400 text-xs font-bold uppercase">Sin movimientos hoy</p>
+                      <button
+                        onClick={() => {
+                          // Aquí podrías abrir el modal de abono directamente
+                          setSelectedLoan(loan);
+                          setIsPaymentModalOpen(true);
+                        }}
+                        className="bg-slate-900 p-3 rounded-2xl text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90"
+                      >
+                        <DollarSign size={20} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  /* Estado cuando no hay cobros */
+                  <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] p-12 text-center">
+                    <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                      <CheckCircle size={32} className="text-emerald-500" />
+                    </div>
+                    <p className="text-slate-800 text-sm font-black uppercase italic tracking-widest">¡Día Completado!</p>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase mt-1">No hay cobros pendientes para hoy</p>
                   </div>
                 )}
               </div>
@@ -1613,10 +1649,108 @@ const LoanAdminApp = () => {
                   })}
                 </div>
 
-                {/* Usamos el Modal Responsive que ya diseñamos antes */}
+                {/* MODAL DE LIQUIDACIÓN DE COMISIONES - ESTILO APEX */}
                 {selectedComisionista && (
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:justify-end z-[110] animate-in fade-in duration-300">
-                    {/* ... (Aquí va el código del Bottom Sheet que ya tienes arriba, se integra igual) ... */}
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:justify-end z-[150] animate-in fade-in duration-300">
+                    <div className="bg-white h-[92vh] sm:h-full w-full sm:max-w-md shadow-2xl flex flex-col animate-in slide-in-from-bottom sm:slide-in-from-right duration-500 rounded-t-[3rem] sm:rounded-t-none sm:rounded-l-[3rem] overflow-hidden border-t border-slate-100">
+
+                      <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-4 mb-2 sm:hidden" />
+
+                      {/* Header del Modal - Texto más grande */}
+                      <div className="p-8 pb-4 bg-white">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-4">
+                            <div className="bg-emerald-100 p-4 rounded-2xl text-emerald-600 shadow-sm">
+                              <UserCheck size={28} />
+                            </div>
+                            <div>
+                              <h2 className="text-2xl font-black text-slate-800 tracking-tight leading-tight uppercase italic truncate max-w-[220px]">
+                                {selectedComisionista.nombre}
+                              </h2>
+                              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">Liquidación de Pagos</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setSelectedComisionista(null); setSelectedCommissions([]); }}
+                            className="p-3 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 transition-all active:scale-90"
+                          >
+                            <X size={28} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Lista de Registros - Tarjetas más legibles */}
+                      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest px-2 mb-2">Seleccione comisiones a pagar:</p>
+
+                        {selectedComisionista.registro_comisiones
+                          ?.sort((a, b) => (a.estado_pago === 'pendiente' ? -1 : 1))
+                          .map((reg) => {
+                            const isPagada = reg.estado_pago === 'pagado';
+                            const isSelected = selectedCommissions.includes(reg.id);
+
+                            return (
+                              <div
+                                key={reg.id}
+                                onClick={() => !isPagada && (isSelected
+                                  ? setSelectedCommissions(prev => prev.filter(id => id !== reg.id))
+                                  : setSelectedCommissions(prev => [...prev, reg.id]))}
+                                className={`p-6 rounded-[2rem] border-2 transition-all duration-300 active:scale-[0.97] ${isPagada
+                                  ? 'bg-slate-100 border-transparent opacity-50'
+                                  : isSelected
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100'
+                                    : 'bg-white border-white hover:border-blue-200 cursor-pointer shadow-sm'
+                                  }`}
+                              >
+                                <div className="flex justify-between items-center">
+                                  <div className="min-w-0">
+                                    <p className={`text-base font-black uppercase tracking-tight truncate ${isSelected ? 'text-white' : 'text-slate-800'}`}>
+                                      {reg.prestamos?.clientes?.nombre || 'Cliente Final'}
+                                    </p>
+                                    <p className={`text-sm font-black mt-1 ${isSelected ? 'text-blue-100' : 'text-blue-600'}`}>
+                                      {formatCurrency(reg.monto_comision)}
+                                    </p>
+                                  </div>
+                                  {isSelected ? (
+                                    <CheckCircle size={26} className="text-white" />
+                                  ) : !isPagada ? (
+                                    <div className="w-6 h-6 rounded-full border-2 border-slate-200" />
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        <div className="h-20" />
+                      </div>
+
+                      {/* Footer del Modal - Resumen de Pago Muy Claro */}
+                      <div className="p-8 pb-14 sm:pb-10 bg-white border-t border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-[160]">
+                        <div className="flex justify-between items-end mb-8 px-2">
+                          <div>
+                            <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1">Monto Total</p>
+                            <p className="text-4xl font-black text-slate-900 italic leading-none">
+                              {formatCurrency(selectedComisionista.registro_comisiones?.filter(r => selectedCommissions.includes(r.id)).reduce((acc, curr) => acc + curr.monto_comision, 0) || 0)}
+                            </p>
+                          </div>
+                          <div className="bg-slate-900 text-white px-4 py-2 rounded-2xl font-black text-xs uppercase tracking-tighter shadow-lg">
+                            {selectedCommissions.length} ITEMS
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handlePayCommissions}
+                          disabled={selectedCommissions.length === 0 || loading}
+                          className="w-full bg-blue-600 text-white py-6 rounded-[2.5rem] font-black text-sm uppercase tracking-[0.2em] hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-300 transition-all flex justify-center items-center gap-4 shadow-xl shadow-blue-200 active:scale-95"
+                        >
+                          {loading ? (
+                            <RefreshCw className="animate-spin" size={24} />
+                          ) : (
+                            <Check size={24} strokeWidth={4} />
+                          )}
+                          <span>CONFIRMAR LIQUIDACIÓN</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
