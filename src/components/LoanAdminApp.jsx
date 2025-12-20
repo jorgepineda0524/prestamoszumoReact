@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent, FileSpreadsheet, Smartphone, X, Check, CheckCircle, Search } from 'lucide-react';
+import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent, FileSpreadsheet, Smartphone, X, Check, CheckCircle, Search, Sparkles, CreditCard, UserPlus } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import UserForm from './UserForm';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
+import PaymentForm from './PaymentForm';
 
 const LoanAdminApp = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -13,23 +14,25 @@ const LoanAdminApp = () => {
   const [showLoanForm, setShowLoanForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState(null);
-  const [totalCapital, setTotalCapital] = useState(0); 
+  const [totalCapital, setTotalCapital] = useState(0);
   const [settingsLoading, setSettingsLoading] = useState(false);
-  const [userSubTab, setUserSubTab] = useState('clientsList'); 
+  const [userSubTab, setUserSubTab] = useState('clientsList');
   const [showUserFormModal, setShowUserFormModal] = useState(false);
   const [formMode, setFormMode] = useState(null);
   const [selectedComisionista, setSelectedComisionista] = useState(null);
   const [selectedCommissions, setSelectedCommissions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedLoanForPayment, setSelectedLoanForPayment] = useState(null);
   const [paymentFormData, setPaymentFormData] = useState({
     loan_id: '',
     monto_pago: '',
     fecha_pago: new Date().toISOString().split('T')[0],
   });
-  const [activeLoansList, setActiveLoansList] = useState([]); 
+  const [activeLoansList, setActiveLoansList] = useState([]);
   const [clientToEdit, setClientToEdit] = useState(null);
-  const [comisionistas, setComisionistas] = useState([]); 
+  const [comisionistas, setComisionistas] = useState([]);
   const [loanSubTab, setLoanSubTab] = useState('loansList');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pin, setPin] = useState('');
@@ -62,7 +65,7 @@ const LoanAdminApp = () => {
     } else if (activeTab === 'home') {
       fetchClients();
       fetchLoans();
-    } 
+    }
 
     fetchTotalCapital();
     fetchComisionistas();
@@ -71,7 +74,7 @@ const LoanAdminApp = () => {
   const handleVerifyPin = (enteredPin) => {
     if (enteredPin === SECURITY_PIN) {
       setIsAuthenticated(true);
-      if (navigator.vibrate) navigator.vibrate(50); 
+      if (navigator.vibrate) navigator.vibrate(50);
     } else {
       setTimeout(() => {
         setPin('');
@@ -90,30 +93,30 @@ const LoanAdminApp = () => {
   };
 
   const fetchTotalCapital = async () => {
-      try {
-          const { data, error } = await supabase
-              .from('configuracion')
-              .select('capital_invertido')
-              .limit(1)
-              .maybeSingle(); 
+    try {
+      const { data, error } = await supabase
+        .from('configuracion')
+        .select('capital_invertido')
+        .limit(1)
+        .maybeSingle();
 
-          if (error) throw error; 
-          
-          if (data) {
-              setTotalCapital(data.capital_invertido || 0);
-          } else {
-              setTotalCapital(0); 
-          }
-      } catch (error) {
-          console.error('Error cargando capital total:', error);
+      if (error) throw error;
+
+      if (data) {
+        setTotalCapital(data.capital_invertido || 0);
+      } else {
+        setTotalCapital(0);
       }
+    } catch (error) {
+      console.error('Error cargando capital total:', error);
+    }
   };
 
   const fetchComisionistas = async () => {
-      try {
-          const { data, error } = await supabase
-              .from('comisionistas')
-              .select(`
+    try {
+      const { data, error } = await supabase
+        .from('comisionistas')
+        .select(`
                   *,
                   registro_comisiones (
                       id,
@@ -126,298 +129,303 @@ const LoanAdminApp = () => {
                       )
                   )
               `)
-              .eq('estado', true)
-              .order('nombre', { ascending: true });
+        .eq('estado', true)
+        .order('nombre', { ascending: true });
 
-          if (error) throw error;
-          setComisionistas(data || []);
-      } catch (error) {
-          console.error('Error fetching comisionistas:', error.message);
-      }
+      if (error) throw error;
+      setComisionistas(data || []);
+    } catch (error) {
+      console.error('Error fetching comisionistas:', error.message);
+    }
   };
 
   const fetchClients = async () => {
-      setLoading(true);
-      try {
-          const { data, error } = await supabase
-              .from('clientes')
-              .select('*')
-              .eq('estado', true) 
-              .order('nombre', { ascending: true });
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('estado', true)
+        .order('nombre', { ascending: true });
 
-          if (error) throw error;
-          setClients(data || []);
-          
-      } catch (error) {
-          // ...
-      } finally {
-          setLoading(false);
-      }
+      if (error) throw error;
+      setClients(data || []);
+
+    } catch (error) {
+      // ...
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchLoans = async () => {
-      setLoading(true);
-      try {
-          const { data, error } = await supabase
-              .from('prestamos')
-              .select('*, clientes(nombre)') 
-              .eq('estado', 'activo') 
-              .order('fecha_inicio', { ascending: false });
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('prestamos')
+        .select('*, clientes(nombre)')
+        .eq('estado', 'activo')
+        .order('fecha_inicio', { ascending: false });
 
-          if (error) throw error;
-          setLoans(data || []);
-          setActiveLoansList(data || []);
-          
-      } catch (error) {
-          console.error("Error al cargar préstamos:", error);
-      } finally {
-          setLoading(false);
-      }
+      if (error) throw error;
+      setLoans(data || []);
+      setActiveLoansList(data || []);
+
+    } catch (error) {
+      console.error("Error al cargar préstamos:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredLoans = useMemo(() => {
-      if (!searchTerm.trim()) return loans;
+    if (!searchTerm.trim()) return loans;
 
-      const busqueda = searchTerm.toLowerCase().trim();
-      
-      return loans.filter(loan => {
-          const nombreCliente = loan.clientes?.nombre?.toLowerCase() || '';
-          const nombreComisionista = loan.nombre_comisionista?.toLowerCase() || '';
-          
-          return nombreCliente.includes(busqueda) || nombreComisionista.includes(busqueda);
-      });
-  }, [loans, searchTerm]); 
+    const busqueda = searchTerm.toLowerCase().trim();
+
+    return loans.filter(loan => {
+      const nombreCliente = loan.clientes?.nombre?.toLowerCase() || '';
+      const nombreComisionista = loan.nombre_comisionista?.toLowerCase() || '';
+
+      return nombreCliente.includes(busqueda) || nombreComisionista.includes(busqueda);
+    });
+  }, [loans, searchTerm]);
+
+  const handleOpenPayment = (loan) => {
+    setSelectedLoanForPayment(loan);
+    setIsPaymentModalOpen(true);
+  };
 
   const handleEditClient = (client) => {
-      setClientToEdit(client);
-      setFormMode(client.hasOwnProperty('estado') ? 'client' : 'comisionista');
-      setShowUserFormModal(true);
+    setClientToEdit(client);
+    setFormMode(client.hasOwnProperty('estado') ? 'client' : 'comisionista');
+    setShowUserFormModal(true);
   };
 
   const handlePayCommissions = async () => {
-      if (selectedCommissions.length === 0) return;
-      setLoading(true);
-      try {
-          const { error } = await supabase
-              .from('registro_comisiones')
-              .update({ estado_pago: 'pagado' })
-              .in('id', selectedCommissions);
+    if (selectedCommissions.length === 0) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('registro_comisiones')
+        .update({ estado_pago: 'pagado' })
+        .in('id', selectedCommissions);
 
-          if (error) throw error;
+      if (error) throw error;
 
-          Swal.fire({ title: 'Éxito', text: 'Comisiones liquidadas', icon: 'success', timer: 2000 });
+      Swal.fire({ title: 'Éxito', text: 'Comisiones liquidadas', icon: 'success', timer: 2000 });
 
-          setSelectedCommissions([]);
-          setSelectedComisionista(null);
-          fetchComisionistas(); // Para refrescar los datos
-      } catch (error) {
-          Swal.fire('Error', error.message, 'error');
-      } finally {
-          setLoading(false);
-      }
+      setSelectedCommissions([]);
+      setSelectedComisionista(null);
+      fetchComisionistas(); // Para refrescar los datos
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveClient = async (clientData) => {
-        setLoading(true);
-        try {
-            const isEditing = !!clientToEdit;
+    setLoading(true);
+    try {
+      const isEditing = !!clientToEdit;
 
-            const dataToSave = {
-                nombre: clientData.nombre,
-                cedula: clientData.cedula || null,
-                telefono: clientData.telefono,
-                direccion: clientData.direccion || null,
-                email: clientData.email || null,
-                estado: true
-            };
+      const dataToSave = {
+        nombre: clientData.nombre,
+        cedula: clientData.cedula || null,
+        telefono: clientData.telefono,
+        direccion: clientData.direccion || null,
+        email: clientData.email || null,
+        estado: true
+      };
 
-            let error;
+      let error;
 
-            if (isEditing) {
-                const result = await supabase
-                    .from('clientes')
-                    .update(dataToSave)
-                    .eq('id', clientToEdit.id); 
-                error = result.error;
-            } else {
-                const result = await supabase
-                    .from('clientes')
-                    .insert([dataToSave]);
-                error = result.error;
-            }
+      if (isEditing) {
+        const result = await supabase
+          .from('clientes')
+          .update(dataToSave)
+          .eq('id', clientToEdit.id);
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from('clientes')
+          .insert([dataToSave]);
+        error = result.error;
+      }
 
-            if (error) throw error;
+      if (error) throw error;
 
-            Swal.fire({
-                icon: 'success',
-                title: isEditing ? 'Cliente Actualizado' : 'Cliente Creado',
-                text: isEditing ? 'Los datos se actualizaron correctamente.' : 'El cliente ha sido guardado exitosamente.',
-                timer: 2000,
-                showConfirmButton: false
-            });
+      Swal.fire({
+        icon: 'success',
+        title: isEditing ? 'Cliente Actualizado' : 'Cliente Creado',
+        text: isEditing ? 'Los datos se actualizaron correctamente.' : 'El cliente ha sido guardado exitosamente.',
+        timer: 2000,
+        showConfirmButton: false
+      });
 
-            fetchClients();
-            setClientToEdit(null); 
-            setShowUserFormModal(false);
-            setFormMode(null);
+      fetchClients();
+      setClientToEdit(null);
+      setShowUserFormModal(false);
+      setFormMode(null);
 
-        } catch (error) {
-            console.error("Error de Supabase:", error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: error.message || 'Ocurrió un error inesperado.',
-            });
-        } finally {
-            setLoading(false);
-        }
+    } catch (error) {
+      console.error("Error de Supabase:", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: error.message || 'Ocurrió un error inesperado.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteClient = (clientId) => {
-        Swal.fire({
-            title: '¿Desactivar Cliente?',
-            html: 'Se marcará este cliente como inactivo. Sus datos históricos se mantendrán.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#dc2626',
-            cancelButtonColor: '#6b7280',
-            confirmButtonText: 'Sí, Desactivar',
-            cancelButtonText: 'Cancelar',
-            reverseButtons: true,
-            customClass: {
-                popup: 'rounded-xl shadow-2xl', 
-                confirmButton: 'font-semibold px-4 py-2',
-                cancelButton: 'font-semibold px-4 py-2'
-            }
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    const { error } = await supabase
-                        .from('clientes')
-                        .update({ estado: false }) 
-                        .eq('id', clientId);
-
-                    if (error) throw error;
-                    
-                    Swal.fire({
-                        title: '¡Desactivado!',
-                        text: 'El cliente ha sido marcado como inactivo.',
-                        icon: 'success',
-                        confirmButtonColor: '#10b981',
-                    });
-                    
-                    fetchClients();
-                } catch (error) {
-                    console.error('Error al desactivar cliente:', error);
-                    Swal.fire('Error', `Ocurrió un error al desactivar: ${error.message}`, 'error');
-                }
-            }
-        });
-  };
-
-  const handleSaveComisionista = async (comisionistaData) => {
-      setLoading(true);
-      try {
-          const isEditing = !!clientToEdit; 
-
-          const dataToSave = {
-              nombre: comisionistaData.nombre,
-              cedula: comisionistaData.cedula || null,
-              telefono: comisionistaData.telefono,
-              email: comisionistaData.email || null,
-              estado: true 
-          };
-
-          let error;
-
-          if (isEditing) {
-              const result = await supabase
-                  .from('comisionistas')
-                  .update(dataToSave)
-                  .eq('id', clientToEdit.id);
-              error = result.error;
-          } else {
-              const result = await supabase
-                  .from('comisionistas')
-                  .insert([dataToSave]);
-              error = result.error;
-          }
+    Swal.fire({
+      title: '¿Desactivar Cliente?',
+      html: 'Se marcará este cliente como inactivo. Sus datos históricos se mantendrán.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Sí, Desactivar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      customClass: {
+        popup: 'rounded-xl shadow-2xl',
+        confirmButton: 'font-semibold px-4 py-2',
+        cancelButton: 'font-semibold px-4 py-2'
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const { error } = await supabase
+            .from('clientes')
+            .update({ estado: false })
+            .eq('id', clientId);
 
           if (error) throw error;
-          
-          Swal.fire({ 
-              title: 'Éxito', 
-              text: isEditing ? 'Comisionista actualizado correctamente.' : 'Comisionista guardado exitosamente.', 
-              icon: 'success', 
-              timer: 2000, 
-              showConfirmButton: false 
+
+          Swal.fire({
+            title: '¡Desactivado!',
+            text: 'El cliente ha sido marcado como inactivo.',
+            icon: 'success',
+            confirmButtonColor: '#10b981',
           });
 
           fetchClients();
-          fetchComisionistas();
-          setShowUserFormModal(false);
-          setFormMode(null);
-          setClientToEdit(null); 
-      } catch (error) {
-          console.error('Error guardando comisionista:', error);
-          Swal.fire({ 
-              title: 'Error', 
-              text: 'Error al procesar comisionista: ' + error.message, 
-              icon: 'error', 
-              confirmButtonText: 'Entendido' 
-          });
-      } finally {
-          setLoading(false);
+        } catch (error) {
+          console.error('Error al desactivar cliente:', error);
+          Swal.fire('Error', `Ocurrió un error al desactivar: ${error.message}`, 'error');
+        }
       }
+    });
+  };
+
+  const handleSaveComisionista = async (comisionistaData) => {
+    setLoading(true);
+    try {
+      const isEditing = !!clientToEdit;
+
+      const dataToSave = {
+        nombre: comisionistaData.nombre,
+        cedula: comisionistaData.cedula || null,
+        telefono: comisionistaData.telefono,
+        email: comisionistaData.email || null,
+        estado: true
+      };
+
+      let error;
+
+      if (isEditing) {
+        const result = await supabase
+          .from('comisionistas')
+          .update(dataToSave)
+          .eq('id', clientToEdit.id);
+        error = result.error;
+      } else {
+        const result = await supabase
+          .from('comisionistas')
+          .insert([dataToSave]);
+        error = result.error;
+      }
+
+      if (error) throw error;
+
+      Swal.fire({
+        title: 'Éxito',
+        text: isEditing ? 'Comisionista actualizado correctamente.' : 'Comisionista guardado exitosamente.',
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+      fetchClients();
+      fetchComisionistas();
+      setShowUserFormModal(false);
+      setFormMode(null);
+      setClientToEdit(null);
+    } catch (error) {
+      console.error('Error guardando comisionista:', error);
+      Swal.fire({
+        title: 'Error',
+        text: 'Error al procesar comisionista: ' + error.message,
+        icon: 'error',
+        confirmButtonText: 'Entendido'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEditComisionista = (comisionista) => {
-      setClientToEdit(comisionista); 
-      setFormMode('comisionista');   
-      setShowUserFormModal(true);    
+    setClientToEdit(comisionista);
+    setFormMode('comisionista');
+    setShowUserFormModal(true);
   };
 
   const handleUpdateCapital = async (newAmount) => {
-      try {
-          const { data: configRow, error: fetchError } = await supabase
-              .from('configuracion')
-              .select('id')
-              .limit(1)
-              .maybeSingle(); 
+    try {
+      const { data: configRow, error: fetchError } = await supabase
+        .from('configuracion')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
 
-          if (fetchError) throw fetchError;
-          
-          if (configRow) {
-              const configId = configRow.id; 
+      if (fetchError) throw fetchError;
 
-              const { error: updateError } = await supabase
-                  .from('configuracion')
-                  .update({ capital_invertido: newAmount })
-                  .eq('id', configId); 
+      if (configRow) {
+        const configId = configRow.id;
 
-              if (updateError) throw updateError;
-              console.log('Capital actualizado correctamente (Update).');
-              
-          } else {
-              const { error: insertError } = await supabase
-                  .from('configuracion')
-                  .insert([
-                      { capital_invertido: newAmount }
-                  ]); 
+        const { error: updateError } = await supabase
+          .from('configuracion')
+          .update({ capital_invertido: newAmount })
+          .eq('id', configId);
 
-              if (insertError) throw insertError;
-              console.log('Capital insertado correctamente (Insert).');
-          }
+        if (updateError) throw updateError;
+        console.log('Capital actualizado correctamente (Update).');
 
-          setTotalCapital(newAmount);
-          Swal.fire({ title: 'Éxito', text: 'Capital total actualizado exitosamente.', icon: 'success', timer: 4000, showConfirmButton: false })
+      } else {
+        const { error: insertError } = await supabase
+          .from('configuracion')
+          .insert([
+            { capital_invertido: newAmount }
+          ]);
 
-      } catch (error) {
-        console.error('Error al actualizar/insertar capital invertido:', error);
-        Swal.fire({ title: 'Error', text: 'Error al guardar el capital: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
-      } finally {
-          setSettingsLoading(false); 
+        if (insertError) throw insertError;
+        console.log('Capital insertado correctamente (Insert).');
       }
+
+      setTotalCapital(newAmount);
+      Swal.fire({ title: 'Éxito', text: 'Capital total actualizado exitosamente.', icon: 'success', timer: 4000, showConfirmButton: false })
+
+    } catch (error) {
+      console.error('Error al actualizar/insertar capital invertido:', error);
+      Swal.fire({ title: 'Error', text: 'Error al guardar el capital: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
+    } finally {
+      setSettingsLoading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -427,165 +435,165 @@ const LoanAdminApp = () => {
     });
   };
 
-const handleLoanInputChange = (e) => {
-      const { name, value } = e.target;
-      let newValue = value;
+  const handleLoanInputChange = (e) => {
+    const { name, value } = e.target;
+    let newValue = value;
 
-      if (name === 'monto_prestado') {
-          const rawValue = value.replace(/[^0-9]/g, ''); 
-          setLoanFormData(prevData => ({
-              ...prevData,
-              [name]: rawValue
-          }));
-          return; 
-      }
-      
+    if (name === 'monto_prestado') {
+      const rawValue = value.replace(/[^0-9]/g, '');
       setLoanFormData(prevData => ({
-          ...prevData,
-          [name]: newValue
+        ...prevData,
+        [name]: rawValue
       }));
+      return;
+    }
+
+    setLoanFormData(prevData => ({
+      ...prevData,
+      [name]: newValue
+    }));
   };
 
-const handlePaymentInputChange = (e) => {
-      const { name, value } = e.target;
-      let newValue = value;
+  const handlePaymentInputChange = (e) => {
+    const { name, value } = e.target;
+    let newValue = value;
 
-      if (name === 'monto_pago') {
-          const rawValue = value.replace(/[^0-9]/g, ''); 
-          setPaymentFormData(prevData => ({
-              ...prevData,
-              [name]: rawValue
-          }));
-          return;
-      }
-
+    if (name === 'monto_pago') {
+      const rawValue = value.replace(/[^0-9]/g, '');
       setPaymentFormData(prevData => ({
-          ...prevData,
-          [name]: newValue
+        ...prevData,
+        [name]: rawValue
       }));
+      return;
+    }
+
+    setPaymentFormData(prevData => ({
+      ...prevData,
+      [name]: newValue
+    }));
   };
 
   const formatInputCurrency = (amount) => {
-      if (!amount || isNaN(parseFloat(amount))) return '';
-      return new Intl.NumberFormat('es-CO', {
-          style: 'currency',
-          currency: 'COP',
-          minimumFractionDigits: 0
-      }).format(parseFloat(amount));
+    if (!amount || isNaN(parseFloat(amount))) return '';
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(parseFloat(amount));
   };
 
   const cleanCurrencyInput = (input) => {
-      const cleaned = String(input).replace(/[$.]/g, '').replace(/[^0-9]/g, '');
-      return parseInt(cleaned) || '';
+    const cleaned = String(input).replace(/[$.]/g, '').replace(/[^0-9]/g, '');
+    return parseInt(cleaned) || '';
   };
 
   const handlePaymentSubmit = async () => {
-      const { loan_id, monto_pago, fecha_pago } = paymentFormData;
-      const monto = parseFloat(monto_pago);
+    const { loan_id, monto_pago, fecha_pago } = paymentFormData;
+    const monto = parseFloat(monto_pago);
 
-      if (!loan_id || monto <= 0 || !fecha_pago) {
-          Swal.fire({ title: 'Error', text: 'Por favor selecciona un préstamo e ingresa un monto válido.', icon: 'error', confirmButtonText: 'Entendido' })
-          return;
+    if (!loan_id || monto <= 0 || !fecha_pago) {
+      Swal.fire({ title: 'Error', text: 'Por favor selecciona un préstamo e ingresa un monto válido.', icon: 'error', confirmButtonText: 'Entendido' })
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const selectedLoan = loans.find(l => l.id.toString() === loan_id.toString());
+
+      if (!selectedLoan) {
+        Swal.fire({ title: 'Información', text: 'Préstamo no encontrado.', icon: 'info', timer: 4000, showConfirmButton: false })
+        return;
       }
 
-      setLoading(true);
-      try {
-          const selectedLoan = loans.find(l => l.id.toString() === loan_id.toString());
-
-          if (!selectedLoan) {
-              Swal.fire({ title: 'Información', text: 'Préstamo no encontrado.', icon: 'info', timer: 4000, showConfirmButton: false })
-              return;
-          }
-
-          if (monto > selectedLoan.saldo_pendiente) {
-              Swal.fire({ title: 'Error', text: `El pago de ${formatCurrency(monto)} excede el saldo pendiente de ${formatCurrency(selectedLoan.saldo_pendiente)}.`, icon: 'error', confirmButtonText: 'Entendido' })
-              return;
-          }
-
-          const nuevoSaldo = selectedLoan.saldo_pendiente - monto;
-          const nuevoEstado = nuevoSaldo <= 0 ? 'pagado' : 'activo';
-          const { error: paymentError } = await supabase
-              .from('pagos')
-              .insert([
-                  {
-                      prestamo_id: loan_id,
-                      monto_pagado: monto,
-                      fecha_pago: fecha_pago,
-                      saldo_anterior: selectedLoan.saldo_pendiente,
-                      saldo_nuevo: nuevoSaldo,
-                  }
-              ]);
-
-          if (paymentError) throw paymentError;
-          const { error: loanUpdateError } = await supabase
-              .from('prestamos')
-              .update({
-                  saldo_pendiente: nuevoSaldo,
-                  estado: nuevoEstado
-              })
-              .eq('id', loan_id);
-
-          if (loanUpdateError) throw loanUpdateError;
-
-          Swal.fire({ title: 'Éxito', text: `Pago de ${formatCurrency(monto)} registrado. Nuevo saldo: ${formatCurrency(nuevoSaldo)}.`, icon: 'success', timer: 4000, showConfirmButton: false })
-
-          setPaymentFormData({
-              loan_id: '',
-              monto_pago: '',
-              fecha_pago: new Date().toISOString().split('T')[0],
-          });
-          
-          fetchLoans();
-          setActiveTab('loans');
-          
-      } catch (error) {
-          console.error('Error procesando el pago:', error);
-          Swal.fire({ title: 'Error', text: 'Error al procesar el pago: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
-      } finally {
-          setLoading(false);
+      if (monto > selectedLoan.saldo_pendiente) {
+        Swal.fire({ title: 'Error', text: `El pago de ${formatCurrency(monto)} excede el saldo pendiente de ${formatCurrency(selectedLoan.saldo_pendiente)}.`, icon: 'error', confirmButtonText: 'Entendido' })
+        return;
       }
+
+      const nuevoSaldo = selectedLoan.saldo_pendiente - monto;
+      const nuevoEstado = nuevoSaldo <= 0 ? 'pagado' : 'activo';
+      const { error: paymentError } = await supabase
+        .from('pagos')
+        .insert([
+          {
+            prestamo_id: loan_id,
+            monto_pagado: monto,
+            fecha_pago: fecha_pago,
+            saldo_anterior: selectedLoan.saldo_pendiente,
+            saldo_nuevo: nuevoSaldo,
+          }
+        ]);
+
+      if (paymentError) throw paymentError;
+      const { error: loanUpdateError } = await supabase
+        .from('prestamos')
+        .update({
+          saldo_pendiente: nuevoSaldo,
+          estado: nuevoEstado
+        })
+        .eq('id', loan_id);
+
+      if (loanUpdateError) throw loanUpdateError;
+
+      Swal.fire({ title: 'Éxito', text: `Pago de ${formatCurrency(monto)} registrado. Nuevo saldo: ${formatCurrency(nuevoSaldo)}.`, icon: 'success', timer: 4000, showConfirmButton: false })
+
+      setPaymentFormData({
+        loan_id: '',
+        monto_pago: '',
+        fecha_pago: new Date().toISOString().split('T')[0],
+      });
+
+      fetchLoans();
+      setActiveTab('loans');
+
+    } catch (error) {
+      console.error('Error procesando el pago:', error);
+      Swal.fire({ title: 'Error', text: 'Error al procesar el pago: ' + error.message, icon: 'error', confirmButtonText: 'Entendido' })
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleNavigateToPayment = (loanId) => {
-      const selectedLoan = loans.find(l => String(l.id) === String(loanId));
-      let montoSugerido = '';
+    const selectedLoan = loans.find(l => String(l.id) === String(loanId));
+    let montoSugerido = '';
 
-      if (selectedLoan) {
-          const totalSemanas = selectedLoan.plazo_dias / 7;
-          montoSugerido = Math.round(selectedLoan.total_a_pagar / totalSemanas);
-      }
+    if (selectedLoan) {
+      const totalSemanas = selectedLoan.plazo_dias / 7;
+      montoSugerido = Math.round(selectedLoan.total_a_pagar / totalSemanas);
+    }
 
-      setActiveTab('payments');
-      setPaymentFormData({
-          loan_id: String(loanId), 
-          monto_pago: montoSugerido.toString(),
-          fecha_pago: new Date().toISOString().split('T')[0],
-      });
-  }; 
+    setActiveTab('payments');
+    setPaymentFormData({
+      loan_id: String(loanId),
+      monto_pago: montoSugerido.toString(),
+      fecha_pago: new Date().toISOString().split('T')[0],
+    });
+  };
 
   const calculateLoanDetails = () => {
     const monto = parseFloat(loanFormData.monto_prestado) || 0;
     const tasaTotal = parseFloat(loanFormData.tasa_interes) || 0;
-    const porcentajeComision = parseFloat(loanFormData.porcentaje_comision) || 0; 
-    const numCiclos = parseInt(loanFormData.plazo_dias) || 1; 
+    const porcentajeComision = parseFloat(loanFormData.porcentaje_comision) || 0;
+    const numCiclos = parseInt(loanFormData.plazo_dias) || 1;
     const fechaBase = loanFormData.fecha_prestamo || new Date().toISOString().split('T')[0];
     const SEMANAS_POR_CICLO = 4;
     const interesTotal = monto * (tasaTotal / 100) * numCiclos;
     const totalCliente = monto + interesTotal;
-    const plazoTotalSemanas = numCiclos * SEMANAS_POR_CICLO; 
-    const cuotaSemanal = (totalCliente > 0 && plazoTotalSemanas > 0) 
-                        ? totalCliente / plazoTotalSemanas 
-                        : 0;
+    const plazoTotalSemanas = numCiclos * SEMANAS_POR_CICLO;
+    const cuotaSemanal = (totalCliente > 0 && plazoTotalSemanas > 0)
+      ? totalCliente / plazoTotalSemanas
+      : 0;
     const fechaObjeto = new Date(fechaBase + 'T00:00:00');
     fechaObjeto.setDate(fechaObjeto.getDate() + (numCiclos * 28));
-    const montoComision = monto * (porcentajeComision / 100) * numCiclos; 
-    const interesNetoDueno = interesTotal - montoComision; 
+    const montoComision = monto * (porcentajeComision / 100) * numCiclos;
+    const interesNetoDueno = interesTotal - montoComision;
 
     // fechaVen.setDate(fechaVen.getDate() + (numCiclos * 28));
     const fechaVencimientoFormatted = fechaObjeto.toISOString().split('T')[0];
     return {
-      interes: interesTotal.toFixed(2), 
-      total: totalCliente.toFixed(2),   
+      interes: interesTotal.toFixed(2),
+      total: totalCliente.toFixed(2),
       cuotaSemanal: cuotaSemanal.toFixed(2),
       montoComision: montoComision.toFixed(2),
       interesNetoDueno: interesNetoDueno.toFixed(2),
@@ -601,9 +609,9 @@ const handlePaymentInputChange = (e) => {
           .from('clientes')
           .insert([formData])
           .select();
-        
+
         if (error) throw error;
-        
+
         Swal.fire({ title: 'Éxito', text: 'Cliente guardado exitosamente', icon: 'success', timer: 4000, showConfirmButton: false })
 
         setFormData({
@@ -656,28 +664,28 @@ const handlePaymentInputChange = (e) => {
         .from('prestamos')
         .insert([loanData])
         .select();
-      
+
       if (error) throw error;
 
-      const prestamoId = prestamoData[0].id; 
+      const prestamoId = prestamoData[0].id;
       const montoComision = parseFloat(loanDetails.montoComision);
-        
+
       if (loanFormData.comisionista_id && montoComision > 0) {
-          const comisionData = {
-              prestamo_id: prestamoId,
-              comisionista_id: loanFormData.comisionista_id,
-              monto_comision: parseFloat(loanDetails.montoComision),
-              porcentaje_aplicado: parseFloat(loanFormData.porcentaje_comision),
-              estado_pago: 'pendiente'
-          };
+        const comisionData = {
+          prestamo_id: prestamoId,
+          comisionista_id: loanFormData.comisionista_id,
+          monto_comision: parseFloat(loanDetails.montoComision),
+          porcentaje_aplicado: parseFloat(loanFormData.porcentaje_comision),
+          estado_pago: 'pendiente'
+        };
 
-          const { error: comisionError } = await supabase
-              .from('registro_comisiones')
-              .insert([comisionData]);
+        const { error: comisionError } = await supabase
+          .from('registro_comisiones')
+          .insert([comisionData]);
 
-          if (comisionError) throw comisionError;
+        if (comisionError) throw comisionError;
       }
-      
+
       Swal.fire({ title: 'Éxito', text: 'Préstamo registrado exitosamente', icon: 'success', timer: 4000, showConfirmButton: false })
       fetchComisionistas();
       setLoanFormData({
@@ -701,92 +709,93 @@ const handlePaymentInputChange = (e) => {
     }
   };
 
-const handleDeleteLoan = (loanToDelete) => {
-      const montoPrestado = loanToDelete.monto_prestado; 
-      Swal.fire({
-          title: '¿Eliminar Préstamo?',
-          html: `
-              <p>El préstamo a ${loanToDelete.cliente_nombre} será desactivado. 
-              El monto de ${formatCurrency(montoPrestado)} será reintegrado al capital disponible.</p>
-              <p class="mt-2 font-semibold text-red-600">Esta acción no se puede deshacer.</p>
-          `,
-          icon: 'warning',
-          showCancelButton: true,
-          confirmButtonColor: '#dc2626',
-          cancelButtonColor: '#6b7280',  
-          confirmButtonText: 'Sí, Eliminar y Reintegrar',
-          cancelButtonText: 'Cancelar',
-          reverseButtons: true,
-          customClass: {
-              popup: 'rounded-xl shadow-2xl', 
-              confirmButton: 'font-semibold px-4 py-2',
-              cancelButton: 'font-semibold px-4 py-2'
-          }
-      }).then(async (result) => {
-          
-          if (result.isConfirmed) {
-              
-              let loadingToast;
-              try {
-                  loadingToast = Swal.fire({
-                      title: 'Procesando...',
-                      text: 'Eliminando préstamo y reintegrando capital. Por favor, espere.',
-                      allowOutsideClick: false,
-                      showConfirmButton: false,
-                      didOpen: () => {
-                          Swal.showLoading()
-                      }
-                  });
-                  const { error: loanError } = await supabase
-                      .from('prestamos')
-                      .update({ estado: 'inactivo' }) 
-                      .eq('id', loanToDelete.id);
+  const handleDeleteLoan = (loanToDelete) => {
+    // 1. Extraemos los datos correctamente (usando la relación de Supabase para el nombre)
+    const montoPrestado = parseFloat(loanToDelete.monto_prestado) || 0;
+    const nombreCliente = loanToDelete.clientes?.nombre || 'este cliente';
 
-                  if (loanError) throw loanError;
-                  const nuevoCapitalDisponible = capitalDisponible + montoPrestado;
+    Swal.fire({
+      title: '¿ELIMINAR PRÉSTAMO?',
+      html: `
+        <div className="text-center">
+          <p className="text-slate-600">El préstamo de <b className="text-slate-900">${nombreCliente}</b> será desactivado.</p>
+          <p className="mt-2 text-blue-600 font-black">SE REINTEGRARÁN: ${formatCurrency(montoPrestado)}</p>
+          <p className="mt-4 text-[10px] font-bold text-rose-500 uppercase tracking-widest">Esta acción liberará el capital de inmediato</p>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#1e293b', // Color Slate-900 (Apex Dark)
+      cancelButtonColor: '#f43f5e',  // Color Rose-500
+      confirmButtonText: 'SÍ, ELIMINAR',
+      cancelButtonText: 'CANCELAR',
+      reverseButtons: true,
+      customClass: {
+        popup: 'rounded-[2.5rem] border-none shadow-2xl',
+        confirmButton: 'rounded-2xl font-black uppercase text-xs tracking-widest px-6 py-4',
+        cancelButton: 'rounded-2xl font-black uppercase text-xs tracking-widest px-6 py-4'
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        setLoading(true); // Usamos tu estado global de carga
 
-                  const { error: configError } = await supabase
-                      .from('configuracion_capital')
-                      .update({ capital_disponible: nuevoCapitalDisponible })
-                      .eq('id', 1);
+        try {
+          // 2. Desactivamos el préstamo en la base de datos
+          // Al pasar a 'inactivo', tus cálculos de "Saldo Disponible" 
+          // se actualizarán automáticamente al refrescar.
+          const { error: loanError } = await supabase
+            .from('prestamos')
+            .update({ estado: 'inactivo' })
+            .eq('id', loanToDelete.id);
 
-                  if (configError) throw configError;
+          if (loanError) throw loanError;
 
-                  loadingToast.close(); 
-                  
-                  Swal.fire({
-                      title: '¡Eliminado y Reintegrado!',
-                      html: `El préstamo ha sido desactivado y **${formatCurrency(montoPrestado)}** ha sido reintegrado al capital.`,
-                      icon: 'success',
-                      confirmButtonColor: '#10b981',
-                  });
-                  
-                  fetchLoans(); 
-                  fetchCapitalConfig();
-                  
-              } catch (error) {
-                  loadingToast.close();
-                  console.error('Error al eliminar préstamo y reintegrar capital:', error);
-                  Swal.fire('Error', `Ocurrió un error al procesar la eliminación: ${error.message}`, 'error');
-              }
-          }
-      });
+          // 3. Alerta de éxito con el nuevo diseño
+          Swal.fire({
+            title: '¡OPERACIÓN EXITOSA!',
+            html: `<p className="text-sm font-bold text-slate-500 uppercase">El capital de ${formatCurrency(montoPrestado)} ha sido reintegrado.</p>`,
+            icon: 'success',
+            confirmButtonColor: '#2563eb',
+            customClass: {
+              popup: 'rounded-[2.5rem]',
+              confirmButton: 'rounded-2xl font-black uppercase text-xs tracking-widest px-8 py-4'
+            }
+          });
+
+          // 4. Refrescamos los datos para que el Home y las Listas se actualicen
+          if (typeof fetchLoans === 'function') fetchLoans();
+          if (typeof fetchTotalCapital === 'function') fetchTotalCapital(); // Ajustado al nombre real de tu función
+
+        } catch (error) {
+          console.error('Error al eliminar préstamo:', error);
+          Swal.fire({
+            title: 'ERROR',
+            text: `No se pudo procesar: ${error.message}`,
+            icon: 'error',
+            confirmButtonColor: '#ef4444',
+            customClass: { popup: 'rounded-[2rem]' }
+          });
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0
-      }).format(amount);
-    };
-    const exportToExcel = () => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+  const exportToExcel = () => {
     const dataToExport = loans.map((loan, index) => {
       const cuotaSemanal = loan.total_a_pagar / (loan.plazo_dias / 7);
       const progresoPago = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
       const interes = loan.total_a_pagar - loan.monto_prestado;
       const montoPagado = loan.total_a_pagar - loan.saldo_pendiente;
-      
+
       return {
         'No.': index + 1,
         'Cliente': loan.clientes?.nombre || 'N/A',
@@ -815,7 +824,7 @@ const handleDeleteLoan = (loanToDelete) => {
     });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    
+
     const columnWidths = [
       { wch: 5 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 25 },
       { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
@@ -829,7 +838,7 @@ const handleDeleteLoan = (loanToDelete) => {
 
     const fecha = new Date().toISOString().split('T')[0];
     const fileName = `Prestamos_${fecha}.xlsx`;
-    
+
     XLSX.writeFile(workbook, fileName);
   };
 
@@ -839,1139 +848,834 @@ const handleDeleteLoan = (loanToDelete) => {
   const totalMontoInicialPrestado = loans.reduce((sum, l) => sum + (l.monto_prestado || 0), 0);
   const totalSaldoPendiente = loans.reduce((sum, l) => sum + (l.saldo_pendiente || 0), 0);
   const totalMontoCobrado = loans.reduce((sum, l) => {
-      return sum + ((l.total_a_pagar || 0) - (l.saldo_pendiente || 0));
+    return sum + ((l.total_a_pagar || 0) - (l.saldo_pendiente || 0));
   }, 0);
   const totalRegresado = loans.reduce((sum, l) => {
-      const montoPagado = (l.total_a_pagar || 0) - (l.saldo_pendiente || 0);
-      return sum + montoPagado;
+    const montoPagado = (l.total_a_pagar || 0) - (l.saldo_pendiente || 0);
+    return sum + montoPagado;
   }, 0);
   const totalInteresGenerado = loans.reduce((sum, l) => sum + ((l.total_a_pagar || 0) - (l.monto_prestado || 0)), 0);
   const saldoDisponible = totalCapital + totalInteresGenerado - totalSaldoPendiente;
   const renderContent = () => {
-    switch(activeTab) {
+    switch (activeTab) {
       case 'home':
         return (
-          <div className="p-6">
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tighter mb-8">
-                <span className="
-                    bg-clip-text text-transparent 
-                    bg-gradient-to-r from-white via-cyan-300 to-blue-600 
-                    // Usamos una sombra de brillo (glow) para el efecto neón sin ser excesivo
-                    drop-shadow-[0_2px_15px_rgba(59,130,246,0.6)] 
-                    
-                    // TIPOGRAFÍA: Fuente Sans-Serif (Máximo Peso y compacto)
-                    font-sans uppercase 
-                ">
-                    Apex
-                </span>
-            </h1>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-blue-100 text-lg mb-1">Préstamos Activos</p>
-                      <p className="text-4xl font-bold">{activeLoans}</p>
-                    </div>
-                    <FileText size={48} className="opacity-80" />
-                  </div>
+          <div className="p-6 space-y-8 pb-24">
+            {/* 1. Encabezado de Bienvenida Estilo APEX */}
+            <div className="flex flex-col items-center mb-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={18} className="text-blue-500 animate-pulse" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Dashboard Principal</span>
               </div>
-
-              <div className="bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-emerald-100 text-lg mb-1">Total Clientes</p>
-                      <p className="text-4xl font-bold">{clients.length}</p>
-                    </div>
-                    <Users size={48} className="opacity-80" />
-                  </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-rose-400 to-rose-500 rounded-2xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-rose-100 text-lg mb-1">Capital Prestado</p>
-                      <p className="text-3xl font-bold">{formatCurrency(totalPrestado)}</p>
-                    </div>
-                    <DollarSign size={48} className="opacity-80" />
-                  </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl p-6 text-white shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-amber-100 text-lg mb-1">Intereses Total</p>
-                      <p className="text-3xl font-bold">{formatCurrency(totalInteres)}</p>
-                    </div>
-                    <TrendingUp size={48} className="opacity-80" />
-                  </div>
-              </div>
-
+              <h1 className="text-4xl font-black text-slate-800 tracking-tighter uppercase italic leading-none text-center">
+                APEX <span className="text-blue-600">FINANCE</span>
+              </h1>
+              <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-4 rounded-full shadow-lg shadow-blue-100"></div>
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-md">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Préstamos Recientes</h2>
+            {/* 2. Grid de Estadísticas Principales */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Préstamos Activos */}
+              <div className="bg-white border border-slate-100 p-5 rounded-[2.5rem] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="absolute -right-2 -top-2 bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <FileText size={24} className="text-blue-600 opacity-20" />
+                </div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 relative z-10">Activos</p>
+                <p className="text-4xl font-black text-slate-800 italic relative z-10">{activeLoans}</p>
+                <p className="text-[9px] font-bold text-blue-600 uppercase mt-2">Créditos vigentes</p>
+              </div>
+
+              {/* Total Clientes */}
+              <div className="bg-white border border-slate-100 p-5 rounded-[2.5rem] shadow-sm hover:shadow-md transition-all relative overflow-hidden group">
+                <div className="absolute -right-2 -top-2 bg-emerald-50 w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Users size={24} className="text-emerald-600 opacity-20" />
+                </div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 relative z-10">Clientes</p>
+                <p className="text-4xl font-black text-slate-800 italic relative z-10">{clients.length}</p>
+                <p className="text-[9px] font-bold text-emerald-600 uppercase mt-2">Registrados</p>
+              </div>
+            </div>
+
+            {/* 3. Tarjeta de Capital Grande (Estilo Dark Ajustes) */}
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden border border-white/5">
+              <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-blue-600/20 rounded-full blur-[80px]"></div>
+
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="bg-white/10 p-2.5 rounded-2xl backdrop-blur-md">
+                    <DollarSign size={24} className="text-cyan-400" />
+                  </div>
+                  <p className="text-cyan-100 text-xs font-black uppercase tracking-widest leading-none">Capital Prestado</p>
+                </div>
+
+                <p className="text-4xl sm:text-5xl font-black tracking-tighter mb-8 italic">
+                  {formatCurrency(totalPrestado)}
+                </p>
+
+                <div className="grid grid-cols-1 gap-4 pt-6 border-t border-white/10">
+                  <div className="flex justify-between items-center px-2">
+                    <div>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1 text-left">Intereses Totales</p>
+                      <p className="text-xl font-black text-orange-400 italic">{formatCurrency(totalInteres)}</p>
+                    </div>
+                    <TrendingUp size={32} className="text-orange-400/20" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Lista de Préstamos Recientes Estilizada */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-2">
+                <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">Actividad Reciente</h2>
+                <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-1 rounded-lg">Top 5</span>
+              </div>
+
               <div className="space-y-3">
                 {loans.slice(0, 5).map((loan) => (
-                  <div key={loan.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <DollarSign size={20} className="text-blue-600" />
+                  <div key={loan.id} className="bg-white border border-slate-100 p-4 rounded-[1.8rem] flex items-center justify-between shadow-sm group active:scale-95 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:bg-blue-600 transition-colors group-hover:border-blue-600">
+                        <DollarSign size={20} className="text-slate-400 group-hover:text-white transition-colors" />
                       </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{loan.clientes?.nombre}</p>
-                        <p className="text-sm text-gray-500">{formatCurrency(loan.monto_prestado)} • {loan.modalidad}</p>
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-800 text-sm truncate uppercase tracking-tight">{loan.clientes?.nombre}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                          {formatCurrency(loan.monto_prestado)} • <span className="text-blue-500">{loan.modalidad}</span>
+                        </p>
                       </div>
                     </div>
+
                     <div className="text-right">
-                      <p className="font-bold text-green-600">{formatCurrency(loan.total_a_pagar)}</p>
-                      <p className="text-xs text-gray-500">{loan.estado}</p>
+                      <p className="font-black text-emerald-600 text-sm italic">{formatCurrency(loan.total_a_pagar)}</p>
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <p className="text-[8px] font-black text-slate-400 uppercase">{loan.estado}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
+
                 {loans.length === 0 && (
-                  <p className="text-center text-gray-500 py-4">No hay préstamos registrados</p>
+                  <div className="bg-slate-50 border border-dashed border-slate-200 rounded-[2rem] p-10 text-center">
+                    <RefreshCw size={32} className="mx-auto text-slate-300 mb-2 animate-spin-slow" />
+                    <p className="text-slate-400 text-xs font-bold uppercase">Sin movimientos hoy</p>
+                  </div>
                 )}
               </div>
+            </div>
+
+            {/* Footer sutil */}
+            <div className="text-center pt-4 opacity-30">
+              <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.4em]">Control de Activos v2.0</p>
             </div>
           </div>
         );
 
       case 'clients':
-      return (
-            <div className="p-6 relative"> 
-                <h1 className="text-3xl font-bold text-gray-800 mb-6">Clientes Registrados</h1>
-                <button
-                    onClick={() => {
-                        setShowUserFormModal(true);
-                        setFormMode(null);
-                    }}
-                    className="fixed bottom-20 right-6 z-40 p-4 bg-green-600 text-white rounded-full shadow-2xl hover:bg-green-700 transition-all transform hover:scale-105"
-                    title="Nuevo Usuario"
-                >
-                    <Plus size={28} /> 
-                </button>
-                
-                {!showUserFormModal && (
-                    <>
-                        <div className="flex border-b border-gray-200 mb-6">
-                            <button
-                                onClick={() => setUserSubTab('clientsList')}
-                                className={`pb-3 px-4 font-semibold text-sm transition-colors ${
-                                    userSubTab === 'clientsList' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                                }`}
-                            >
-                                Clientes ({clients.length})
-                            </button>
-                            <button
-                                onClick={() => setUserSubTab('comisionistasList')}
-                                className={`pb-3 px-4 font-semibold text-sm transition-colors ${
-                                    userSubTab === 'comisionistasList' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-500 hover:text-gray-700'
-                                }`}
-                            >
-                                Comisionistas ({comisionistas.length})
-                            </button>
-                        </div>
-
-                {userSubTab === 'clientsList' && (
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                      {loading ? (
-                          <div className="p-8 text-center text-gray-500">Cargando...</div>
-                      ) : clients.length === 0 ? (
-                          <div className="p-8 text-center text-gray-500">
-                              <Users size={40} className="mx-auto text-gray-300 mb-2" />
-                              <p>No hay clientes.</p>
-                          </div>
-                      ) : (
-                          <div className="divide-y divide-gray-100">
-                              {clients.map((client) => (
-                                  <div key={client.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                                      {/* Info Principal: Avatar e Identidad */}
-                                      <div className="flex items-center gap-3 min-w-0">
-                                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                              <span className="text-blue-600 font-bold text-sm">
-                                                  {client.nombre.charAt(0).toUpperCase()}
-                                              </span>
-                                          </div>
-                                          <div className="min-w-0">
-                                              <p className="font-bold text-gray-900 truncate text-sm sm:text-base">
-                                                  {client.nombre}
-                                              </p>
-                                              <div className="text-xs text-gray-500 flex items-center gap-1">
-                                                  <Smartphone size={12} /> {client.telefono}
-                                              </div>
-                                          </div>
-                                      </div>
-
-                                      {/* Acciones Compactas */}
-                                      <div className="flex items-center gap-1 ml-2">
-                                          <button
-                                              onClick={() => handleEditClient(client)}
-                                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-                                              title="Ver/Editar"
-                                          >
-                                              <Eye size={20} />
-                                          </button>
-                                          <button
-                                              onClick={() => handleDeleteClient(client.id)}
-                                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-full transition-colors"
-                                              title="Eliminar"
-                                          >
-                                              <Trash2 size={20} />
-                                          </button>
-                                      </div>
-                                  </div>
-                              ))}
-                          </div>
-                      )}
-                  </div>
-              )}
-
-                {userSubTab === 'comisionistasList' && (
-                            <div className="bg-white rounded-2xl shadow-lg p-6">
-                                <p className="text-gray-500 mb-4">Solo se muestran comisionistas activos.</p>
-                                <div className="space-y-4">
-                                    {comisionistas.map((c) => (
-                                        <div key={c.id} className="flex justify-between items-center p-3 border-b hover:bg-gray-50 rounded-lg transition-colors">
-                                            <div>
-                                                <p className="font-semibold text-gray-800">{c.nombre}</p>
-                                                <p className="text-sm text-gray-500">Celular: {c.telefono}</p>
-                                            </div>
-                                            <button
-                                                onClick={() => handleEditComisionista(c)} 
-                                                className="text-indigo-600 hover:text-indigo-800 mr-3"
-                                                title="Ver Detalle"
-                                            >
-                                                <Eye size={18} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                                {comisionistas.length === 0 && (
-                                    <p className="text-center text-gray-500 py-4">No hay comisionistas activos.</p>
-                                )}
-                            </div>
-                        )}
-                    </>
-                )}
-
-                {showUserFormModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-                            
-                            {formMode === null && (
-                                <div className="p-6 text-center">
-                                    <h2 className="text-2xl font-bold text-gray-800 mb-6">¿Qué deseas crear?</h2>
-                                    <div className="flex justify-center gap-6">
-                                        <button 
-                                            onClick={() => setFormMode('client')}
-                                            className="flex flex-col items-center justify-center p-6 w-1/2 bg-blue-100 text-blue-800 rounded-xl hover:bg-blue-200 transition-colors shadow-md"
-                                        >
-                                            <Users size={32} />
-                                            <span className="font-semibold mt-2">Nuevo Cliente</span>
-                                        </button>
-                                        <button 
-                                            onClick={() => setFormMode('comisionista')}
-                                            className="flex flex-col items-center justify-center p-6 w-1/2 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 transition-colors shadow-md"
-                                        >
-                                            <Percent size={32} />
-                                            <span className="font-semibold mt-2">Nuevo Comisionista</span>
-                                        </button>
-                                    </div>
-                                    <button
-                                        onClick={() => setShowUserFormModal(false)}
-                                        className="mt-6 text-gray-500 hover:text-gray-700 text-sm"
-                                    >
-                                        Cancelar
-                                    </button>
-                                </div>
-                            )}
-
-                            {formMode !== null && (
-                                <UserForm 
-                                    isComisionistaMode={formMode === 'comisionista'} 
-                                    clientToEdit={clientToEdit}
-                                    onSaveClient={handleSaveClient} 
-                                    onSaveComisionista={handleSaveComisionista}
-                                    loading={loading}
-                                    onCancel={() => {
-                                        setShowUserFormModal(false);
-                                        setClientToEdit(null);
-                                        setFormMode(null);
-                                    }}
-                                    onBackToSelection={() => setFormMode(null)} 
-                                />
-                            )}
-                        </div>
-                    </div>
-                )}
+        return (
+          <div className="p-6 relative pb-24">
+            {/* 1. Encabezado Maestro Apex */}
+            <div className="flex flex-col items-center mb-8">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={18} className="text-blue-500 animate-pulse" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Directorio Central</span>
+              </div>
+              <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic leading-none text-center">
+                Gestión de <span className="text-blue-600">Usuarios</span>
+              </h1>
+              <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-4 rounded-full shadow-lg shadow-blue-100"></div>
             </div>
-      );
+
+            {/* 2. Botón Flotante (FAB) Estilo Premium */}
+            <button
+              onClick={() => {
+                setShowUserFormModal(true);
+                setFormMode(null);
+              }}
+              className="fixed bottom-24 right-6 z-[90] p-4 bg-slate-900 text-white rounded-2xl shadow-2xl hover:scale-110 active:scale-95 transition-all border border-white/10"
+              title="Nuevo Registro"
+            >
+              <Plus size={28} strokeWidth={3} />
+            </button>
+
+            {!showUserFormModal && (
+              <>
+                {/* 3. Selector de Pestañas (Sub-Tabs) Estilo Pastilla */}
+                <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-8 border border-slate-200 max-w-sm mx-auto shadow-inner">
+                  <button
+                    onClick={() => setUserSubTab('clientsList')}
+                    className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${userSubTab === 'clientsList' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                  >
+                    Clientes ({clients.length})
+                  </button>
+                  <button
+                    onClick={() => setUserSubTab('comisionistasList')}
+                    className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${userSubTab === 'comisionistasList' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                  >
+                    Socios ({comisionistas.length})
+                  </button>
+                </div>
+
+                {/* 4. Lista de Clientes en Tarjetas */}
+                {userSubTab === 'clientsList' && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {loading ? (
+                      <div className="p-12 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">Consultando registros...</div>
+                    ) : clients.length === 0 ? (
+                      <div className="bg-white rounded-[2.5rem] p-12 text-center border-2 border-dashed border-slate-100">
+                        <Users size={40} className="mx-auto text-slate-200 mb-3" />
+                        <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">No hay clientes registrados</p>
+                      </div>
+                    ) : (
+                      clients.map((client) => (
+                        <div key={client.id} className="bg-white border border-slate-100 rounded-[1.8rem] p-4 flex items-center justify-between hover:shadow-md transition-all group">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center border border-blue-100 text-blue-600 font-black text-lg shadow-sm group-hover:bg-blue-600 group-hover:text-white transition-all">
+                              {client.nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-800 text-sm truncate uppercase tracking-tight leading-tight">{client.nombre}</p>
+                              <div className="flex items-center gap-3 mt-1.5">
+                                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                  <Smartphone size={12} className="text-blue-400" /> {client.telefono}
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                  <CreditCard size={12} className="text-slate-300" /> {client.cedula || 'N/A'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleEditClient(client)}
+                              className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                            >
+                              <Eye size={20} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClient(client.id)}
+                              className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-90"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* 5. Lista de Socios (Comisionistas) */}
+                {userSubTab === 'comisionistasList' && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {comisionistas.length === 0 ? (
+                      <div className="bg-white rounded-[2.5rem] p-12 text-center border-2 border-dashed border-slate-100">
+                        <Percent size={40} className="mx-auto text-slate-200 mb-3" />
+                        <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">No hay socios activos</p>
+                      </div>
+                    ) : (
+                      comisionistas.map((c) => (
+                        <div key={c.id} className="bg-white border border-slate-100 rounded-[1.8rem] p-4 flex items-center justify-between hover:shadow-md transition-all group">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100 text-emerald-600 font-black text-lg shadow-sm group-hover:bg-emerald-600 group-hover:text-white transition-all">
+                              {c.nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-bold text-slate-800 text-sm truncate uppercase tracking-tight">{c.nombre}</p>
+                                <span className="text-[8px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-md font-black uppercase">Socio</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-slate-400">
+                                <Smartphone size={12} className="text-emerald-400" /> {c.telefono}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleEditComisionista(c)}
+                            className="p-3 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all active:scale-90"
+                          >
+                            <Eye size={20} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* 6. Modal de Selección de tipo de Registro */}
+            {showUserFormModal && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in duration-300">
+                {formMode === null ? (
+                  <div className="bg-white rounded-[2.5rem] max-w-lg w-full shadow-2xl overflow-hidden animate-in zoom-in duration-300 border border-slate-100">
+                    <div className="p-8 text-center">
+                      <div className="flex justify-center mb-6">
+                        <div className="bg-blue-100 p-3 rounded-2xl">
+                          <UserPlus size={32} className="text-blue-600" />
+                        </div>
+                      </div>
+                      <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase italic tracking-tight">Nuevo <span className="text-blue-600">Registro</span></h2>
+                      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] mb-8">Selecciona el perfil administrativo</p>
+
+                      <div className="flex flex-col sm:flex-row justify-center gap-4 px-2">
+                        <button
+                          onClick={() => setFormMode('client')}
+                          className="flex flex-col items-center justify-center p-6 flex-1 bg-slate-50 text-slate-800 rounded-[2rem] hover:bg-blue-600 hover:text-white transition-all shadow-sm group active:scale-95"
+                        >
+                          <Users size={32} className="text-blue-600 group-hover:text-white mb-2" />
+                          <span className="font-black uppercase text-[10px] tracking-widest">Nuevo Cliente</span>
+                        </button>
+                        <button
+                          onClick={() => setFormMode('comisionista')}
+                          className="flex flex-col items-center justify-center p-6 flex-1 bg-slate-50 text-slate-800 rounded-[2rem] hover:bg-emerald-600 hover:text-white transition-all shadow-sm group active:scale-95"
+                        >
+                          <Percent size={32} className="text-emerald-600 group-hover:text-white mb-2" />
+                          <span className="font-black uppercase text-[10px] tracking-widest">Nuevo Socio</span>
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setShowUserFormModal(false)}
+                        className="mt-8 text-slate-400 hover:text-slate-600 font-bold uppercase text-[10px] tracking-widest transition-colors"
+                      >
+                        Regresar al panel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <UserForm
+                    isComisionistaMode={formMode === 'comisionista'}
+                    clientToEdit={clientToEdit}
+                    onSaveClient={handleSaveClient}
+                    onSaveComisionista={handleSaveComisionista}
+                    loading={loading}
+                    onCancel={() => {
+                      setShowUserFormModal(false);
+                      setClientToEdit(null);
+                      setFormMode(null);
+                    }}
+                    onBackToSelection={() => setFormMode(null)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        );
 
       case 'loans':
         return (
           <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl font-bold text-gray-800">
+            {/* 1. Encabezado de Página Estilo Apex */}
+            <div className="flex flex-col items-center mb-8">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={18} className="text-blue-500 animate-pulse" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Gestión de Cartera</span>
+              </div>
+              <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic leading-none">
+                {loanSubTab === 'loansList' ? 'Control de' : 'Reporte de'}{' '}
+                <span className="text-blue-600">
                   {loanSubTab === 'loansList' ? 'Préstamos' : 'Comisiones'}
+                </span>
               </h1>
-              <div className="flex gap-2">
-                {loanSubTab === 'loansList' && (
-                        <button
-                            onClick={() => {
-                                setShowSearch(!showSearch);
-                                if (showSearch) setSearchTerm(''); // Resetea el texto al cerrar
-                            }}
-                            className={`p-2 rounded-xl transition-all ${showSearch ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                        >
-                            <Search size={22} />
-                        </button>
-                )}
-
-                {loanSubTab === 'loansList' && (
-                    <button
-                        onClick={() => setShowLoanForm(!showLoanForm)}
-                        disabled={loading}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center gap-2"
-                    >
-                        <Plus size={20} />
-                        {showLoanForm ? 'Cancelar' : 'Nuevo'}
-                    </button>
-                )}
-              </div>
+              <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-4 rounded-full shadow-lg shadow-blue-100"></div>
             </div>
 
-            {showSearch && loanSubTab === 'loansList' && !showLoanForm && (
-                <div className="mb-6 animate-in slide-in-from-top-2 duration-200">
-                    <div className="relative">
-                        <input
-                            key="search-input-loans" 
-                            type="text"
-                            placeholder="Escribe el nombre del cliente..."
-                            value={searchTerm}
-                            onChange={(e) => {
-                                setSearchTerm(e.target.value);
-                            }}
-                            className="w-full pl-12 pr-10 py-4 bg-white border-2 border-blue-100 rounded-2xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none shadow-sm text-gray-900"
-                        />
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400" size={20} />
-                        
-                        {searchTerm && (
-                            <button 
-                                onClick={() => setSearchTerm('')}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                            >
-                                <X size={18} />
-                            </button>
-                        )}
-                    </div>
-                </div>
-            )}
+            {/* 2. Barra de Herramientas (Buscador y Botón Nuevo) */}
+            <div className="flex justify-between items-center mb-6 px-1">
+              <button
+                onClick={() => {
+                  setShowSearch(!showSearch);
+                  if (showSearch) setSearchTerm('');
+                }}
+                className={`p-3 rounded-2xl transition-all shadow-sm ${showSearch
+                  ? 'bg-blue-600 text-white shadow-blue-200'
+                  : 'bg-white text-slate-400 border border-slate-200 hover:border-blue-300'
+                  }`}
+              >
+                <Search size={22} />
+              </button>
 
-            <div className="flex border-b border-gray-200 mb-6">
+              {loanSubTab === 'loansList' && (
                 <button
-                    onClick={() => { setLoanSubTab('loansList'); setShowLoanForm(false); }} // Al cambiar, ocultamos el formulario
-                    className={`pb-3 px-4 font-semibold text-sm transition-colors ${
-                        loanSubTab === 'loansList' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                  onClick={() => setShowLoanForm(!showLoanForm)}
+                  disabled={loading}
+                  className={`px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-2 transition-all active:scale-95 ${showLoanForm
+                    ? 'bg-white text-slate-500 border border-slate-200'
+                    : 'bg-slate-900 text-white shadow-slate-200'
                     }`}
                 >
-                    Préstamos Activos
+                  {showLoanForm ? <X size={16} /> : <Plus size={16} />}
+                  {showLoanForm ? 'Cerrar Formulario' : 'Nuevo Préstamo'}
                 </button>
-                <button
-                    onClick={() => { setLoanSubTab('commissions'); setShowLoanForm(false); }}
-                    className={`pb-3 px-4 font-semibold text-sm transition-colors ${
-                        loanSubTab === 'commissions' ? 'border-b-2 border-red-600 text-red-600' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    Comisiones (<Percent size={14} className="inline-block mb-1" />)
-                </button>
-            </div>
-
-            {loanSubTab === 'loansList' && (<>      
-            {showLoanForm && (
-              <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Registrar Nuevo Préstamo</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Cliente</label>
-                    <select
-                      name="cliente_id"
-                      value={loanFormData.cliente_id}
-                      onChange={handleLoanInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Selecciona un cliente</option>
-                      {clients.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.nombre} - {client.cedula}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Monto a Prestar</label>
-                      <input
-                          type="text" 
-                          name="monto_prestado"
-                          value={formatInputCurrency(loanFormData.monto_prestado)} 
-                          onChange={handleLoanInputChange}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                          placeholder="Ej: $ 1.000.000" 
-                      />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tasa de Interés (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="tasa_interes"
-                      value={loanFormData.tasa_interes}
-                      onChange={handleLoanInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      placeholder="Ej: 10"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Plazo (Ciclos de 4 Semanas)</label>
-                    <input
-                      type="number"
-                      name="plazo_dias"
-                      value={loanFormData.plazo_dias}
-                      onChange={handleLoanInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      placeholder="Ej: 2 (que son 8 semanas)"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha Inicio</label>
-                    <input
-                      type="date"
-                      name="fecha_prestamo"
-                      value={loanFormData.fecha_prestamo}
-                      onChange={handleLoanInputChange}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  
-                  <div className="col-span-full">
-                    <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-widest text-center text-[10px]">
-                      Día de Cobro Semanal
-                    </label>
-                    
-                    {/* Contenedor Flex para una sola línea */}
-                    <div className="flex justify-between gap-1 sm:gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-                      {[
-                        { d: 'Lunes', c: 'bg-red-500', t: 'text-red-500' },
-                        { d: 'Martes', c: 'bg-orange-500', t: 'text-orange-500' },
-                        { d: 'Miércoles', c: 'bg-yellow-500', t: 'text-yellow-500' },
-                        { d: 'Jueves', c: 'bg-green-500', t: 'text-green-500' },
-                        { d: 'Viernes', c: 'bg-blue-500', t: 'text-blue-500' },
-                        { d: 'Sábado', c: 'bg-indigo-500', t: 'text-indigo-500' },
-                        { d: 'Domingo', c: 'bg-purple-500', t: 'text-purple-500' }
-                      ].map((item) => {
-                        const isSelected = loanFormData.dia_cobro === item.d;
-                        return (
-                          <button
-                            key={item.d}
-                            type="button"
-                            onClick={() => setLoanFormData({ ...loanFormData, dia_cobro: item.d })}
-                            className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${
-                              isSelected
-                                ? `${item.c} text-white shadow-md scale-105 z-10`
-                                : 'bg-white text-gray-400 hover:bg-gray-50'
-                            }`}
-                          >
-                            {/* Letra inicial grande */}
-                            <span className={`text-sm font-black ${isSelected ? 'text-white' : 'text-gray-600'}`}>
-                              {item.d.charAt(0)}
-                            </span>
-                            {/* Nombre corto abajo */}
-                            <span className={`text-[8px] font-bold uppercase ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
-                              {item.d.substring(0, 3)}
-                            </span>
-                            
-                            {/* Indicador de punto si está seleccionado */}
-                            {isSelected && (
-                              <div className="w-1 h-1 bg-white rounded-full mt-0.5 animate-pulse" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Comisionista</label>
-                      <select
-                        name="comisionista_id" 
-                        value={loanFormData.comisionista_id}
-                        onChange={handleLoanInputChange}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="">Selecciona (Opcional)</option>
-                        {comisionistas.map((comisionista) => (
-                        <option key={comisionista.id} value={comisionista.id}>
-                          {comisionista.nombre}
-                        </option>
-                    ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Comisión % (por ciclo)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        name="porcentaje_comision"
-                        value={loanFormData.porcentaje_comision}
-                        onChange={handleLoanInputChange}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                        placeholder="Ej: 5"
-                      />
-                    </div>
-                 </div>   
-                  {loanFormData.monto_prestado && loanFormData.tasa_interes && (
-                    <div className="md:col-span-2 bg-blue-50 p-4 rounded-xl">
-                      <h3 className="font-bold text-gray-800 mb-2">Resumen del Préstamo</h3>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <p className="text-gray-600">Monto prestado:</p>
-                        <p className="font-semibold text-right text-gray-800">{formatCurrency(parseFloat(loanFormData.monto_prestado) || 0)}</p>
-                        <p className="text-gray-600">Interés:</p>
-                        <p className="font-semibold text-right text-orange-600">{formatCurrency(parseFloat(calculateLoanDetails().interes))}</p>
-                        <p className="font-bold text-red-600">Comisión ({loanFormData.porcentaje_comision}%):</p>
-                        <p className="font-bold text-right text-red-600">{formatCurrency(parseFloat(calculateLoanDetails().montoComision))}</p>
-                        <p className="text-gray-600">Interés Neto (Dueño):</p>
-                        <p className="font-semibold text-right text-blue-800">{formatCurrency(parseFloat(calculateLoanDetails().interesNetoDueno))}</p>
-                        <hr className="col-span-2 border-blue-200 my-1" />
-                        <p className="text-gray-600">Total a pagar:</p>
-                        <p className="font-bold text-right text-green-600">{formatCurrency(parseFloat(calculateLoanDetails().total))}</p>
-                        <p className="font-bold text-gray-800">Cuota Semanal:</p>
-                        <p className="font-extrabold text-right text-green-700 text-lg">{formatCurrency(parseFloat(calculateLoanDetails().cuotaSemanal))}</p>
-                        <p className="text-gray-600">Fecha vencimiento:</p>
-                        <p className="font-semibold text-right text-blue-700">{calculateLoanDetails().fechaVencimiento}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="md:col-span-2">
-                    <button
-                      onClick={handleLoanSubmit}
-                      disabled={loading}
-                      className="w-full bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-green-700 transition-all disabled:opacity-50"
-                    >
-                      {loading ? 'Guardando...' : 'Registrar Préstamo'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              {loading ? (
-                <div className="p-8 text-center text-gray-500">Cargando préstamos...</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Cliente</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Préstamo</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Cuota Semanal</th>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase">Progreso</th>
-                        <th className="px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {filteredLoans.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                            No hay préstamos registrados. Crea el primer préstamo.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredLoans.map((loan) => {
-                          const cuotaSemanal = loan.total_a_pagar / (loan.plazo_dias / 7);
-                          const progresoPago = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
-                          
-                          return (
-                            <tr key={loan.id} className="hover:bg-blue-50 transition-colors">
-                              {/* CLIENTE */}
-                              <td className="px-4 py-3">
-                                <div 
-                                  className="cursor-pointer"
-                                  onClick={() => handleNavigateToPayment(loan.id)}
-                                >
-                                  <p className="font-semibold text-indigo-600 hover:text-indigo-800 text-sm">
-                                    {loan.clientes?.nombre}
-                                  </p>
-                                  <div className="flex items-center gap-1 mt-1">
-                                    {/* ETIQUETA DEL DÍA DE COBRO */}
-                                    <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-md font-black uppercase border border-blue-100">
-                                      Cobra: {loan.dia_cobro}
-                                    </span>
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* PRÉSTAMO */}
-                              <td className="px-4 py-3">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-bold text-gray-800">
-                                      {formatCurrency(loan.monto_prestado)}
-                                    </span>
-                                    <span className="text-xs text-orange-600 font-semibold">
-                                      +{loan.tasa_interes}%
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <Clock size={12} />
-                                    <span>{loan.plazo_dias} días</span>
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* CUOTA SEMANAL */}
-                              <td className="px-4 py-3">
-                                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-2 rounded-lg inline-block">
-                                  <p className="text-xs font-medium mb-0.5">Cuota Semanal</p>
-                                  <p className="text-lg font-bold">
-                                    {formatCurrency(cuotaSemanal)}
-                                  </p>
-                                </div>
-                              </td>
-
-                              {/* PROGRESO */}
-                              <td className="px-4 py-3">
-                                <div className="space-y-1">
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="text-gray-600 font-medium">Saldo</span>
-                                    <span className="font-bold text-red-600">
-                                      {formatCurrency(loan.saldo_pendiente)}
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-2">
-                                    <div
-                                      className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full transition-all"
-                                      style={{ width: `${progresoPago}%` }}
-                                    />
-                                  </div>
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="text-gray-500">{progresoPago.toFixed(0)}% pagado</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                      loan.estado === 'activo' 
-                                        ? 'bg-green-100 text-green-700' 
-                                        : 'bg-gray-100 text-gray-700'
-                                    }`}>
-                                      {loan.estado}
-                                    </span>
-                                  </div>
-                                </div>
-                              </td>
-
-                              {/* ACCIONES */}
-                              <td className="px-4 py-3">
-                                <div className="flex gap-2 justify-center">
-                                  <button
-                                    onClick={() => setSelectedLoan(loan)}
-                                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                    title="Ver detalle"
-                                  >
-                                    <Eye size={18} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteLoan(loan)}
-                                    disabled={loading}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Eliminar"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
               )}
             </div>
 
-            {selectedLoan && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-                  {/* Header */}
-                  <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white">
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      <DollarSign size={28} />
-                      Detalle del Préstamo
-                    </h2>
-                    <p className="text-blue-100 mt-1">{selectedLoan.clientes?.nombre}</p>
-                  </div>
+            {/* 3. Buscador Expandible */}
+            {showSearch && !showLoanForm && (
+              <div className="mb-6 animate-in slide-in-from-top-2 duration-300">
+                <div className="relative group">
+                  <input
+                    type="text"
+                    placeholder="Escribe el nombre del cliente..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-10 py-4 bg-white border border-slate-200 rounded-[1.8rem] focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all font-bold text-slate-700 shadow-sm"
+                  />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500" size={20} />
+                  {searchTerm && (
+                    <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
-                  <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <DollarSign size={16} className="text-green-600" />
-                          <p className="text-xs text-gray-600 font-semibold">Monto Prestado</p>
+            {/* 4. Selector de Pestañas (Sub-Tabs) Estilo Pastilla */}
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-8 border border-slate-200 max-w-sm mx-auto shadow-inner">
+              <button
+                onClick={() => { setLoanSubTab('loansList'); setShowLoanForm(false); }}
+                className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${loanSubTab === 'loansList' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+              >
+                Préstamos
+              </button>
+              <button
+                onClick={() => { setLoanSubTab('commissions'); setShowLoanForm(false); }}
+                className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${loanSubTab === 'commissions' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+              >
+                Comisiones <Percent size={10} className="inline ml-1" />
+              </button>
+            </div>
+
+            {/* 5. VISTA DE PRÉSTAMOS */}
+            {loanSubTab === 'loansList' && (
+              <>
+                {/* FORMULARIO DE REGISTRO (Diseño Premium) */}
+                {showLoanForm && (
+                  <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.1)] border border-slate-100 mb-8 animate-in zoom-in duration-300">
+                    <div className="p-8 pb-4 bg-slate-50 border-b border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-blue-100 p-2.5 rounded-xl">
+                          <DollarSign className="text-blue-600" size={20} />
                         </div>
-                        <p className="text-xl font-bold text-gray-800">
-                          {formatCurrency(selectedLoan.monto_prestado)}
-                        </p>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <TrendingUp size={16} className="text-orange-600" />
-                          <p className="text-xs text-gray-600 font-semibold">Interés</p>
-                        </div>
-                        <p className="text-xl font-bold text-orange-600">
-                          {formatCurrency(selectedLoan.total_a_pagar - selectedLoan.monto_prestado)}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">{selectedLoan.tasa_interes}% {selectedLoan.modalidad}</p>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <DollarSign size={16} className="text-blue-600" />
-                          <p className="text-xs text-gray-600 font-semibold">Total a Pagar</p>
-                        </div>
-                        <p className="text-xl font-bold text-blue-600">
-                          {formatCurrency(selectedLoan.total_a_pagar)}
-                        </p>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl p-4 border border-red-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <DollarSign size={16} className="text-red-600" />
-                          <p className="text-xs text-gray-600 font-semibold">Saldo Pendiente</p>
-                        </div>
-                        <p className="text-xl font-bold text-red-600">
-                          {formatCurrency(selectedLoan.saldo_pendiente)}
-                        </p>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-4 border border-purple-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock size={16} className="text-purple-600" />
-                          <p className="text-xs text-gray-600 font-semibold">Plazo</p>
-                        </div>
-                        <p className="text-xl font-bold text-purple-600">
-                          {selectedLoan.plazo_dias / 7} sem
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">{selectedLoan.plazo_dias} días</p>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar size={16} className="text-indigo-600" />
-                          <p className="text-xs text-gray-600 font-semibold">Estado</p>
-                        </div>
-                        <p className={`text-lg font-bold capitalize ${
-                          selectedLoan.estado === 'activo' ? 'text-green-600' : 'text-gray-600'
-                        }`}>
-                          {selectedLoan.estado}
-                        </p>
-                      </div>
-
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar size={16} className="text-blue-600" />
-                          <p className="text-xs text-gray-600 font-semibold">Día de Cobro</p>
-                        </div>
-                        <p className="text-xl font-black text-blue-700">
-                          Todos los {selectedLoan.dia_cobro}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Cuota Semanal Destacada */}
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-6 text-white shadow-lg">
-                      <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-blue-100 text-sm font-medium mb-1">Cuota Semanal</p>
-                          <p className="text-4xl font-bold">
-                            {formatCurrency(selectedLoan.total_a_pagar / (selectedLoan.plazo_dias / 7))}
-                          </p>
-                          <p className="text-blue-200 text-sm mt-2">
-                            Durante {selectedLoan.plazo_dias / 7} semanas
-                          </p>
+                          <h3 className="text-lg font-black text-slate-800 uppercase italic leading-none">Apertura de Crédito</h3>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Configuración de nuevo préstamo</p>
                         </div>
-                        <DollarSign size={64} className="opacity-20" />
                       </div>
                     </div>
 
-                    {/* Fechas */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-gray-50 rounded-xl p-4">
-                        <p className="text-xs text-gray-600 font-semibold mb-1">Fecha Préstamo</p>
-                        <p className="text-lg font-bold text-gray-800">
-                          {new Date(selectedLoan.fecha_prestamo).toLocaleDateString('es-CO', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl p-4">
-                        <p className="text-xs text-gray-600 font-semibold mb-1">Vencimiento</p>
-                        <p className="text-lg font-bold text-gray-800">
-                          {new Date(selectedLoan.fecha_vencimiento).toLocaleDateString('es-CO', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Comisión */}
-                    {selectedLoan.porcentaje_comision > 0 && (
-                      <div className="bg-orange-50 rounded-xl p-4 border border-orange-200">
-                        <div className="flex items-center gap-2 mb-3">
-                          <UserCheck size={18} className="text-orange-600" />
-                          <p className="text-sm font-bold text-gray-800">Información de Comisión</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-xs text-gray-600 mb-1">Comisionista</p>
-                            <p className="font-semibold text-gray-800">{selectedLoan.nombre_comisionista}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-600 mb-1">Porcentaje</p>
-                            <p className="font-semibold text-orange-600">{selectedLoan.porcentaje_comision}%</p>
-                          </div>
+                    <div className="p-8 space-y-6">
+                      {/* Cliente */}
+                      <div className="group">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Cliente Titular</label>
+                        <div className="relative">
+                          <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500" size={18} />
+                          <select
+                            name="cliente_id"
+                            value={loanFormData.cliente_id}
+                            onChange={handleLoanInputChange}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 outline-none focus:bg-white focus:border-blue-500 transition-all font-bold appearance-none"
+                          >
+                            <option value="">Selecciona un cliente</option>
+                            {clients.map((c) => (<option key={c.id} value={c.id}>{c.nombre} - {c.cedula}</option>))}
+                          </select>
                         </div>
                       </div>
-                    )}
 
-                    {/* Barra de Progreso */}
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-sm font-semibold text-gray-700">Progreso de Pago</p>
-                        <p className="text-sm font-bold text-green-600">
-                          {(((selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente) / selectedLoan.total_a_pagar) * 100).toFixed(1)}%
-                        </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {/* Monto */}
+                        <div className="group">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Monto a Prestar</label>
+                          <div className="relative">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-600 font-black">$</div>
+                            <input
+                              type="text" name="monto_prestado"
+                              value={formatInputCurrency(loanFormData.monto_prestado)}
+                              onChange={handleLoanInputChange}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-10 pr-4 text-slate-700 font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Interés */}
+                        <div className="group">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Interés (%)</label>
+                          <div className="relative">
+                            <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                            <input
+                              type="number" step="0.1" name="tasa_interes"
+                              value={loanFormData.tasa_interes}
+                              onChange={handleLoanInputChange}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Plazo */}
+                        <div className="group">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Plazo (Ciclos de 4 sem)</label>
+                          <div className="relative">
+                            <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                            <input
+                              type="number" name="plazo_dias"
+                              value={loanFormData.plazo_dias}
+                              onChange={handleLoanInputChange}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Fecha */}
+                        <div className="group">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Fecha de Inicio</label>
+                          <div className="relative">
+                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                            <input
+                              type="date" name="fecha_prestamo"
+                              value={loanFormData.fecha_prestamo}
+                              onChange={handleLoanInputChange}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                          className="bg-gradient-to-r from-green-500 to-emerald-600 h-3 rounded-full transition-all"
-                          style={{ width: `${((selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente) / selectedLoan.total_a_pagar) * 100}%` }}
-                        />
+
+                      {/* Día de Cobro */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block text-center">Día de Cobro Semanal</label>
+                        <div className="flex justify-between gap-1 sm:gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+                          {[
+                            { d: 'Lunes', c: 'bg-red-500' }, { d: 'Martes', c: 'bg-orange-500' }, { d: 'Miércoles', c: 'bg-yellow-500' },
+                            { d: 'Jueves', c: 'bg-green-500' }, { d: 'Viernes', c: 'bg-blue-500' }, { d: 'Sábado', c: 'bg-indigo-500' },
+                            { d: 'Domingo', c: 'bg-purple-500' }
+                          ].map((item) => {
+                            const isSelected = loanFormData.dia_cobro === item.d;
+                            return (
+                              <button
+                                key={item.d} type="button"
+                                onClick={() => setLoanFormData({ ...loanFormData, dia_cobro: item.d })}
+                                className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${isSelected ? `${item.c} text-white shadow-md scale-105 z-10` : 'bg-white text-gray-400 hover:bg-slate-50'}`}
+                              >
+                                <span className="text-sm font-black">{item.d.charAt(0)}</span>
+                                <span className="text-[7px] font-bold uppercase">{item.d.substring(0, 3)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center mt-2 text-xs text-gray-600">
-                        <span>Pagado: {formatCurrency(selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente)}</span>
-                        <span>Pendiente: {formatCurrency(selectedLoan.saldo_pendiente)}</span>
+
+                      {/* Comisionista */}
+                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <UserCheck size={16} className="text-emerald-500" />
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gestión de Comisión</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <select
+                            name="comisionista_id"
+                            value={loanFormData.comisionista_id}
+                            onChange={handleLoanInputChange}
+                            className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 px-4 text-slate-700 font-bold outline-none focus:border-emerald-500 transition-all text-sm"
+                          >
+                            <option value="">Sin Comisionista</option>
+                            {comisionistas.map((c) => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
+                          </select>
+
+                          <div className="relative">
+                            <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+                            <input
+                              type="number" name="porcentaje_comision"
+                              value={loanFormData.porcentaje_comision}
+                              onChange={handleLoanInputChange}
+                              placeholder="% Comisión"
+                              className="w-full bg-white border border-slate-200 rounded-2xl py-3.5 pl-10 pr-4 text-slate-700 font-bold outline-none focus:border-emerald-500 transition-all text-sm"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-4 pt-3 border-t border-gray-200">
-                        {(() => {
-                          const totalSemanas = selectedLoan.plazo_dias / 7;
-                          const valorCuota = selectedLoan.total_a_pagar / totalSemanas;
-                          const montoPagado = selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente;
-                          const cuotasPagadas = Math.floor(montoPagado / valorCuota);
-                          return (
-                            <div className="flex justify-center items-center gap-2">
-                              <div className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider">
-                                Lleva {cuotasPagadas} pagadas, de {totalSemanas} 
+
+                      {/* Resumen Final */}
+                      {/* 8. DETALLE FINANCIERO INTEGRADO (Estilo Fila por Fila) */}
+                      {loanFormData.monto_prestado && loanFormData.tasa_interes && (
+                        <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-blue-100 shadow-inner animate-in fade-in slide-in-from-top-4 duration-500">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="bg-blue-200 p-1.5 rounded-lg">
+                              <TrendingUp size={16} className="text-blue-700" />
+                            </div>
+                            <h3 className="font-black text-blue-900 text-xs uppercase tracking-[0.2em]">Resumen de Operación</h3>
+                          </div>
+
+                          <div className="space-y-3">
+                            {/* Monto Prestado */}
+                            <div className="flex justify-between items-center pb-2 border-b border-blue-100/50">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inversión Base</p>
+                              <p className="font-bold text-slate-700 text-base">
+                                {formatCurrency(parseFloat(loanFormData.monto_prestado) || 0)}
+                              </p>
+                            </div>
+
+                            {/* Interés Generado */}
+                            <div className="flex justify-between items-center pb-2 border-b border-blue-100/50">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Interés Bruto</p>
+                              <p className="font-bold text-orange-600 text-base">
+                                +{formatCurrency(parseFloat(calculateLoanDetails().interes))}
+                              </p>
+                            </div>
+
+                            {/* Comisión Socio */}
+                            <div className="flex justify-between items-center pb-2 border-b border-blue-100/50">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Comisión Socio</p>
+                              <div className="text-right">
+                                <p className="font-bold text-rose-500 text-base">
+                                  -{formatCurrency(parseFloat(calculateLoanDetails().montoComision))}
+                                </p>
+                                <p className="text-[8px] text-rose-400 font-bold uppercase">{loanFormData.porcentaje_comision}% Aplicado</p>
                               </div>
                             </div>
-                          );
-                        })()}
-                      </div>
+
+                            {/* Ganancia Neta */}
+                            <div className="flex justify-between items-center pb-2 border-b border-blue-100/50">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Utilidad Neta</p>
+                              <p className="font-bold text-emerald-600 text-base">
+                                {formatCurrency(parseFloat(calculateLoanDetails().interesNetoDueno))}
+                              </p>
+                            </div>
+
+                            {/* TOTAL A PAGAR Y CUOTA (DESTACADOS) */}
+                            <div className="mt-4 p-4 bg-white rounded-2xl border border-blue-100 shadow-sm space-y-3">
+                              <div className="flex justify-between items-center">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Total a Pagar</p>
+                                <p className="font-black text-slate-800 text-xl">
+                                  {formatCurrency(parseFloat(calculateLoanDetails().total))}
+                                </p>
+                              </div>
+
+                              <div className="flex justify-between items-center pt-2 border-t border-slate-50">
+                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-wider">Cuota Semanal</p>
+                                <p className="font-black text-blue-600 text-2xl italic tracking-tighter">
+                                  {formatCurrency(parseFloat(calculateLoanDetails().cuotaSemanal))}
+                                </p>
+                              </div>
+
+                              <div className="mt-2 pt-2 border-t border-slate-50 flex justify-end gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                                <Calendar size={12} className="text-blue-400" />
+                                <span>Vence: {new Date(calculateLoanDetails().fechaVencimiento).toLocaleDateString('es-CO', { dateStyle: 'long' })}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Botón Registrar */}
+                      <button
+                        onClick={handleLoanSubmit}
+                        disabled={loading}
+                        className="w-full py-5 rounded-[22px] font-black text-white uppercase tracking-[0.15em] text-sm shadow-xl shadow-blue-200 bg-gradient-to-r from-blue-600 to-indigo-600 active:scale-95 transition-all flex justify-center items-center gap-3"
+                      >
+                        {loading ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={22} />}
+                        Registrar Crédito Maestro
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  {/* Footer */}
-                  <div className="p-6 bg-gray-50 border-t">
-                    <button
-                      onClick={() => setSelectedLoan(null)}
-                      className="w-full bg-gradient-to-r from-gray-600 to-gray-700 text-white py-3 rounded-xl font-bold hover:from-gray-700 hover:to-gray-800 transition-all"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
+                {/* TABLA DE PRÉSTAMOS (Sigue siendo tu tabla genial pero con bordes redondeados premium) */}
+                <div className="bg-white rounded-[2.5rem] shadow-lg overflow-hidden border border-slate-100">
+                  {loading ? (
+                    <div className="p-12 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">Sincronizando base de datos...</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                          <tr>
+                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Préstamo</th>
+                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cuota</th>
+                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Progreso</th>
+                            <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {filteredLoans.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs italic">No hay registros disponibles</td>
+                            </tr>
+                          ) : (
+                            filteredLoans.map((loan) => {
+                              const cuotaSemanal = loan.total_a_pagar / (loan.plazo_dias / 7);
+                              const progresoPago = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
+                              return (
+                                <tr key={loan.id} className="hover:bg-blue-50/40 transition-colors">
+                                  <td className="px-4 py-4">
+                                    <div className="cursor-pointer" onClick={() => handleNavigateToPayment(loan.id)}>
+                                      <p className="font-bold text-slate-800 text-sm">{loan.clientes?.nombre}</p>
+                                      <div className="flex items-center gap-1.5 mt-1">
+                                        <span className="bg-blue-50 text-blue-600 text-[9px] px-2 py-0.5 rounded-md font-black uppercase border border-blue-100">Cobra: {loan.dia_cobro}</span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 text-sm font-bold text-slate-700">
+                                    {formatCurrency(loan.monto_prestado)}
+                                    <span className="block text-[10px] text-orange-600 font-black">+{loan.tasa_interes}% INT</span>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="bg-blue-600 text-white px-2.5 py-1.5 rounded-xl inline-block shadow-sm">
+                                      <p className="text-[11px] font-black tracking-tight">{formatCurrency(cuotaSemanal)}</p>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase mb-1">
+                                      <span>Saldo: {formatCurrency(loan.saldo_pendiente)}</span>
+                                    </div>
+                                    <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                      <div className="bg-emerald-500 h-full transition-all" style={{ width: `${progresoPago}%` }} />
+                                    </div>
+                                    <p className="text-[9px] font-black text-emerald-600 mt-1">{progresoPago.toFixed(0)}% Pagado</p>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="flex gap-1 justify-center">
+                                      <button onClick={() => setSelectedLoan(loan)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Eye size={18} /></button>
+                                      <button onClick={() => handleDeleteLoan(loan)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={18} /></button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              </div>
+
+                <button
+                  onClick={exportToExcel}
+                  disabled={loading || loans.length === 0}
+                  className="fixed bottom-24 right-6 z-40 p-4 bg-gradient-to-r from-green-600 to-emerald-700 text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all"
+                  title="Exportar a Excel"
+                >
+                  <FileSpreadsheet size={28} />
+                </button>
+              </>
             )}
 
-            <button
-              onClick={exportToExcel}
-              disabled={loading || loans.length === 0}
-              className="fixed bottom-24 right-6 z-40 p-4 bg-gradient-to-r from-green-600 to-emerald-700 text-white rounded-full shadow-2xl hover:shadow-3xl hover:from-green-700 hover:to-emerald-800 transition-all transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              title="Exportar a Excel"
-            >
-              <FileSpreadsheet size={28} />
-            </button>
-            </>
-            )}
-
-          {loanSubTab === 'commissions' && (
-            <div className="space-y-4">
-              {/* Encabezado informativo corto */}
-              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-emerald-500 p-2 rounded-xl text-white">
-                    <Percent size={20} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-emerald-700 font-bold uppercase tracking-wider">Resumen de Deuda</p>
-                    <p className="text-xl font-black text-emerald-800">
-                      {formatCurrency(comisionistas.reduce((acc, c) => 
-                        acc + (c.registro_comisiones?.filter(r => r.estado_pago === 'pendiente')
-                        .reduce((a, b) => a + b.monto_comision, 0) || 0), 0
-                      ))}
-                    </p>
+            {/* 6. VISTA DE COMISIONES (Mantenemos tu lógica pero dentro del nuevo contenedor) */}
+            {loanSubTab === 'commissions' && (
+              <div className="space-y-4 animate-in fade-in duration-500">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-emerald-500 p-3 rounded-2xl text-white shadow-lg shadow-emerald-100">
+                      <Percent size={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-emerald-700 font-black uppercase tracking-[0.2em] mb-1">Deuda Global Socios</p>
+                      <p className="text-3xl font-black text-emerald-900 italic">
+                        {formatCurrency(comisionistas.reduce((acc, c) =>
+                          acc + (c.registro_comisiones?.filter(r => r.estado_pago === 'pendiente')
+                            .reduce((a, b) => a + b.monto_comision, 0) || 0), 0
+                        ))}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {comisionistas.length === 0 ? (
-                <div className="bg-white rounded-3xl p-10 text-center border-2 border-dashed border-slate-200">
-                  <p className="text-slate-400 font-medium">No hay comisionistas para mostrar.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {comisionistas.map(c => {
                     const pendientes = c.registro_comisiones?.filter(r => r.estado_pago === 'pendiente') || [];
                     const totalC = pendientes.reduce((acc, curr) => acc + curr.monto_comision, 0);
-
                     return (
-                      <div key={c.id} className="bg-white border border-slate-100 rounded-2xl p-3 flex items-center justify-between hover:border-blue-300 transition-all shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-slate-50 flex flex-col items-center justify-center border border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 leading-none mb-1">CANT</span>
+                      <div key={c.id} className="bg-white border border-slate-100 rounded-[2rem] p-4 flex items-center justify-between hover:border-blue-300 transition-all shadow-sm hover:shadow-md">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-slate-50 flex flex-col items-center justify-center border border-slate-100 shadow-inner">
+                            <span className="text-[8px] font-black text-slate-400 uppercase leading-none mb-1">Items</span>
                             <span className="text-sm font-black text-slate-700 leading-none">{pendientes.length}</span>
                           </div>
                           <div>
                             <h3 className="font-bold text-slate-800 text-sm">{c.nombre}</h3>
-                            <p className="text-emerald-600 font-black text-sm">{formatCurrency(totalC)}</p>
+                            <p className="text-emerald-600 font-black text-base italic">{formatCurrency(totalC)}</p>
                           </div>
                         </div>
-
-                        <button 
-                          onClick={() => {
-                            setSelectedComisionista(c);
-                            setSelectedCommissions([]);
-                          }}
-                          className="bg-slate-50 hover:bg-blue-600 hover:text-white text-slate-500 p-3 rounded-xl transition-all active:scale-90"
+                        <button
+                          onClick={() => { setSelectedComisionista(c); setSelectedCommissions([]); }}
+                          className="bg-slate-50 hover:bg-blue-600 hover:text-white text-slate-500 p-3.5 rounded-2xl transition-all active:scale-90"
                         >
-                          <Eye size={18} />
+                          <Eye size={20} />
                         </button>
                       </div>
                     );
                   })}
                 </div>
-              )}
 
-              {/* MODAL LATERAL DE DETALLE DE COMISIONES */}
-              {selectedComisionista && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-end z-[100] animate-in fade-in duration-300">
-                  <div className="bg-white h-full w-full max-w-md shadow-2xl flex flex-col animate-in slide-in-from-right duration-500 rounded-l-[40px] overflow-hidden">
-                    
-                    {/* Header Estilizado */}
-                    <div className="p-8 pb-6 border-b border-slate-50 bg-white">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-200">
-                          <UserCheck size={24} />
-                        </div>
-                        <button 
-                          onClick={() => { setSelectedComisionista(null); setSelectedCommissions([]); }}
-                          className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
-                        >
-                          <X size={24} />
-                        </button>
-                      </div>
-                      <h2 className="text-2xl font-black text-slate-800 tracking-tight">{selectedComisionista.nombre}</h2>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-bold uppercase tracking-widest">
-                          CC: {selectedComisionista.cedula}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Lista de Comisiones con scroll suave */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 px-2">Historial de comisiones</p>
-                      
-                      {selectedComisionista.registro_comisiones
-                        ?.sort((a, b) => (a.estado_pago === 'pendiente' ? -1 : 1))
-                        .map((reg) => {
-                          const isPagada = reg.estado_pago === 'pagado';
-                          const isSelected = selectedCommissions.includes(reg.id);
-
-                          return (
-                            <div 
-                              key={reg.id}
-                              onClick={() => !isPagada && (isSelected 
-                                ? setSelectedCommissions(prev => prev.filter(id => id !== reg.id)) 
-                                : setSelectedCommissions(prev => [...prev, reg.id]))}
-                              className={`group relative p-5 rounded-[24px] border-2 transition-all duration-300 ${
-                                isPagada 
-                                  ? 'bg-white/50 border-transparent opacity-60 grayscale' 
-                                  : isSelected 
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-100 scale-[1.02]' 
-                                    : 'bg-white border-white hover:border-blue-200 cursor-pointer shadow-sm hover:shadow-md'
-                              }`}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex items-start gap-3">
-                                  {!isPagada && (
-                                    <div className={`mt-1 w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${
-                                      isSelected ? 'bg-white border-white text-blue-600' : 'bg-slate-50 border-slate-200'
-                                    }`}>
-                                      {isSelected && <Check size={12} strokeWidth={4} />}
-                                    </div>
-                                  )}
-                                  <div>
-                                    <p className={`text-sm font-bold leading-tight ${isSelected ? 'text-white' : 'text-slate-800'}`}>
-                                      {reg.prestamos?.clientes?.nombre || 'Cliente Final'}
-                                    </p>
-                                    <p className={`text-[10px] font-medium mt-1 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
-                                      Monto Préstamo: {formatCurrency(reg.prestamos?.monto_prestado || 0)}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className={`text-base font-black ${isSelected ? 'text-white' : 'text-blue-600'}`}>
-                                    {formatCurrency(reg.monto_comision)}
-                                  </p>
-                                  {isPagada && (
-                                    <span className="text-[9px] font-black uppercase text-emerald-500 mt-1 block">Liquidado</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-
-                    {/* Footer / Resumen de Pago */}
-                    <div className="p-8 bg-white border-t border-slate-100">
-                      <div className="flex justify-between items-center mb-6 px-2">
-                        <div>
-                          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Total a pagar</p>
-                          <p className="text-3xl font-black text-slate-900">
-                            {formatCurrency(selectedComisionista.registro_comisiones?.filter(r => selectedCommissions.includes(r.id)).reduce((acc, curr) => acc + curr.monto_comision, 0) || 0)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] font-bold text-slate-400 block uppercase">Items</span>
-                          <span className="text-lg font-black text-blue-600">{selectedCommissions.length}</span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handlePayCommissions}
-                        disabled={selectedCommissions.length === 0 || loading}
-                        className="w-full bg-slate-900 text-white py-5 rounded-[20px] font-bold text-lg hover:bg-blue-600 disabled:bg-slate-100 disabled:text-slate-300 transition-all flex justify-center items-center gap-3 shadow-2xl shadow-slate-200 active:scale-95"
-                      >
-                        {loading ? <RefreshCw className="animate-spin" size={20} /> : <CheckCircle size={22} />}
-                        Confirmar Pago
-                      </button>
-                    </div>
+                {/* Usamos el Modal Responsive que ya diseñamos antes */}
+                {selectedComisionista && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:justify-end z-[110] animate-in fade-in duration-300">
+                    {/* ... (Aquí va el código del Bottom Sheet que ya tienes arriba, se integra igual) ... */}
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
           </div>
         );
 
       case 'payments':
-      return (
-          <div className="p-6">
-              <h1 className="text-3xl font-bold text-gray-800 mb-6">Registro de Pagos</h1>
-              
-              <div className="bg-white rounded-2xl p-6 shadow-lg max-w-xl mx-auto">
-                  <div className="flex items-center gap-4 mb-4 border-b pb-4">
-                      <Receipt size={32} className="text-indigo-600" />
-                      <h2 className="text-xl font-bold text-gray-700">Registrar Cuota de Préstamo</h2>
-                  </div>
+        const selectedLoanObject = loans.find(l => String(l.id) === String(paymentFormData.loan_id));
 
-                  <div className="space-y-4">
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700">Seleccionar Préstamo</label>
-                        <select
-                            name="loan_id"
-                            value={paymentFormData.loan_id || ""} // Asegura que no sea undefined
-                            onChange={handlePaymentInputChange}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none bg-white text-gray-800"
-                        >
-                            <option value="">-- Seleccione un cliente activo --</option>
-                            
-                            {/* Usamos loans directamente si activeLoansList falla */}
-                            {(activeLoansList.length > 0 ? activeLoansList : loans).map((loan) => (
-                                <option key={loan.id} value={loan.id}>
-                                    {loan.clientes?.nombre} (Saldo: ${loan.saldo_pendiente?.toLocaleString()})
-                                </option>
-                            ))}
-                        </select>
-                        {(activeLoansList.length === 0 && loans.length === 0) && (
-                            <p className="text-red-500 text-xs mt-1 italic">No se encontraron préstamos activos en la base de datos.</p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                          <label className="block text-sm font-medium text-gray-700">Monto a Pagar</label>
-                          <div className="relative">
-                              <span className="absolute left-4 top-3.5 text-gray-500 font-bold">$</span>
-                              <input
-                                  type="number"
-                                  name="monto_pago"
-                                  placeholder="0.00"
-                                  value={paymentFormData.monto_pago}
-                                  onChange={handlePaymentInputChange}
-                                  className="w-full pl-8 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                              />
-                          </div>
-                          <p className="text-xs text-gray-400 italic">
-                              * Se ha sugerido el valor de la cuota programada.
-                          </p>
-                      </div>
-                      
-                      <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha del Pago</label>
-                          <input
-                              type="date"
-                              name="fecha_pago"
-                              value={paymentFormData.fecha_pago}
-                              onChange={handlePaymentInputChange}
-                              disabled={loading}
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none"
-                          />
-                      </div>
-                      
-                      <button
-                          onClick={handlePaymentSubmit}
-                          disabled={loading || !paymentFormData.loan_id || !paymentFormData.monto_pago}
-                          className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 mt-4"
-                      >
-                          {loading ? 'Procesando...' : 'Registrar Pago'}
-                      </button>
-                  </div>
+        return (
+          <div className="p-6">
+            <div className="flex flex-col items-center mb-8">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={18} className="text-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Módulo de Recaudo</span>
               </div>
+              <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic leading-none">
+                Gestión de <span className="text-emerald-600">Pagos</span>
+              </h1>
+              <div className="h-1.5 w-16 bg-emerald-600 mx-auto mt-4 rounded-full shadow-lg shadow-emerald-100"></div>
+            </div>
+
+            {/* LLAMADA AL COMPONENTE EXTERNO */}
+            <div className="flex justify-center">
+              <PaymentForm
+                loans={activeLoansList.length > 0 ? activeLoansList : loans}
+                selectedLoan={selectedLoanObject}
+                loading={loading}
+                onInputChange={(name, value) => {
+                  setPaymentFormData(prev => ({ ...prev, [name]: value }));
+                }}
+                onSavePayment={handlePaymentSubmit}
+                paymentFormData={paymentFormData}
+                formatCurrency={formatCurrency}
+              />
+            </div>
           </div>
-      );
+        );
 
       case 'settings':
         return (
-            <SettingsPage
-                totalCapital={totalCapital}
-                onUpdateCapital={handleUpdateCapital}
-                loading={settingsLoading}
-                formatCurrency={formatCurrency}
-                saldoDisponible={saldoDisponible}
-                totalSaldoPendiente={totalSaldoPendiente}
-                formatInputCurrency={formatInputCurrency}
-                cleanCurrencyInput={cleanCurrencyInput}
-            />
+          <SettingsPage
+            totalCapital={totalCapital}
+            onUpdateCapital={handleUpdateCapital}
+            loading={settingsLoading}
+            formatCurrency={formatCurrency}
+            saldoDisponible={saldoDisponible}
+            totalSaldoPendiente={totalSaldoPendiente}
+            formatInputCurrency={formatInputCurrency}
+            cleanCurrencyInput={cleanCurrencyInput}
+            // AGREGAR ESTAS TRES LÍNEAS:
+            onLogout={() => setIsAuthenticated(false)}
+            securityPin={SECURITY_PIN}
+            onUpdatePin={(newPin) => {
+              // Aquí podrías agregar la lógica de Supabase para guardar el PIN si lo deseas
+              Swal.fire('Éxito', `PIN actualizado a: ${newPin}`, 'success');
+            }}
+          />
         );
 
       default:
@@ -1982,284 +1686,292 @@ const handleDeleteLoan = (loanToDelete) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {!isAuthenticated ? (
-        <LoginScreen 
-          pin={pin} 
-          setPin={setPin} 
-          onVerify={handleVerifyPin} 
+        <LoginScreen
+          pin={pin}
+          setPin={setPin}
+          onVerify={handleVerifyPin}
         />
       ) : (
         /* 2. SI ESTÁ AUTENTICADO, RENDERIZA TODO LO DEMÁS */
         <>
-      <div className="max-w-7xl mx-auto pb-20">
-        {renderContent()}
-      </div>
-
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-around items-center h-20">
-            <button
-              onClick={() => setActiveTab('home')}
-              className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${
-                activeTab === 'home' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Home size={24} />
-              <span className="text-xs font-semibold">Inicio</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('clients')}
-              className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${
-                activeTab === 'clients' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Users size={24} />
-              <span className="text-xs font-semibold">Usuarios</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('loans')}
-              className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${
-                activeTab === 'loans' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <DollarSign size={24} />
-              <span className="text-xs font-semibold">Préstamos</span>
-            </button>
-            <button
-                onClick={() => setActiveTab('payments')} 
-                className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${
-                    activeTab === 'payments' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-                }`}
-            >
-                <Receipt size={24} /> 
-                <span className="text-xs font-semibold">Pagos</span> 
-            </button>
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-xl transition-all ${
-                activeTab === 'settings' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Settings size={24} />
-              <span className="text-xs font-semibold">Ajustes</span>
-            </button>
+          <div className="max-w-7xl mx-auto pb-20">
+            {renderContent()}
           </div>
-        </div>
-      </nav>
-      </>
+
+          <nav className="fixed bottom-0 left-0 right-0 z-[120] bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe">
+            <div className="max-w-md mx-auto flex justify-around items-center h-20 px-2 relative">
+
+              {[
+                { id: 'home', icon: Home, label: 'Inicio', color: 'text-blue-600', bg: 'bg-blue-50' },
+                { id: 'clients', icon: Users, label: 'Usuarios', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                { id: 'loans', icon: DollarSign, label: 'Créditos', color: 'text-violet-600', bg: 'bg-violet-50' },
+                { id: 'payments', icon: Receipt, label: 'Caja', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { id: 'settings', icon: Settings, label: 'Ajustes', color: 'text-slate-800', bg: 'bg-slate-100' }
+              ].map((tab) => {
+                const IsActive = activeTab === tab.id;
+                const IconComponent = tab.icon;
+
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className="relative flex flex-col items-center justify-center flex-1 h-full transition-all duration-300"
+                  >
+                    {/* Bloque de Fondo Activo */}
+                    <div className={`absolute inset-y-2 inset-x-1 rounded-2xl transition-all duration-300 ${IsActive ? `${tab.bg} opacity-100 scale-100` : 'bg-transparent opacity-0 scale-95'
+                      }`} />
+
+                    {/* Contenedor de Icono y Texto */}
+                    <div className={`relative z-10 flex flex-col items-center gap-1 transition-transform duration-300 ${IsActive ? 'scale-105' : 'scale-100'
+                      }`}>
+                      <IconComponent
+                        size={22}
+                        strokeWidth={IsActive ? 3 : 2}
+                        className={IsActive ? tab.color : 'text-slate-400'}
+                      />
+
+                      <span className={`text-[9px] font-black uppercase tracking-widest transition-colors duration-300 ${IsActive ? tab.color : 'text-slate-400'
+                        }`}>
+                        {tab.label}
+                      </span>
+                    </div>
+
+                    {/* Barrita indicadora superior */}
+                    <div className={`absolute top-0 w-8 h-1 rounded-b-full transition-all duration-500 ${IsActive ? `${tab.bg.replace('50', '600')} opacity-100` : 'opacity-0'
+                      }`} />
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </>
       )}
     </div>
   );
 };
 
-const SettingsPage = ({ totalCapital, onUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente, formatInputCurrency, cleanCurrencyInput }) => {
-    const [newCapital, setNewCapital] = useState(totalCapital.toString());
-    
-    useEffect(() => {
-        setNewCapital(totalCapital.toString());
-    }, [totalCapital]);
-    
-    const handleInputChange = (e) => {
-        const displayValue = e.target.value;
-        const numericValue = cleanCurrencyInput(displayValue);
-        setNewCapital(numericValue);
-    };
-    
-    const handleSave = () => {
-        const value = parseFloat(newCapital);
-        if (!isNaN(value) && value >= 0) {
-            onUpdateCapital(value);
-        } else {
-            Swal.fire({ title: 'Error', text: 'Por favor, ingresa un valor numérico válido para el capital.', icon: 'error', confirmButtonText: 'Entendido' })
-        }
-    };
+const SettingsPage = ({ totalCapital, onUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente, formatInputCurrency, cleanCurrencyInput, onLogout, securityPin, onUpdatePin }) => {
+  const [newCapital, setNewCapital] = useState(totalCapital.toString());
 
-    const isDisabled = loading || 
-        parseFloat(newCapital) === totalCapital || 
-        !newCapital || 
-        parseFloat(newCapital) <= 0;
+  useEffect(() => {
+    setNewCapital(totalCapital.toString());
+  }, [totalCapital]);
 
-    return (
-        <div className="p-6 space-y-8 max-w-2xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Configuración</h1>
+  const handleInputChange = (e) => {
+    const displayValue = e.target.value;
+    const numericValue = cleanCurrencyInput(displayValue);
+    setNewCapital(numericValue);
+  };
 
-            <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl p-6 text-white shadow-xl">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-indigo-200 text-lg mb-1">Saldo Disponible para Prestar</p>
-                        <p className="text-4xl font-bold">
-                            {formatCurrency(saldoDisponible)}
-                        </p>
-                    </div>
-                    <DollarSign size={48} className="opacity-80" />
-                </div>
-                <div className="mt-4 pt-3 border-t border-indigo-400">
-                    <p className="text-sm text-indigo-100">
-                        Capital Total: <span className="font-semibold">{formatCurrency(totalCapital)}</span>
-                    </p>
-                    <p className="text-sm text-indigo-100">
-                        Total Pendiente de Regresar: <span className="font-semibold">{formatCurrency(totalSaldoPendiente)}</span>
-                    </p>
-                </div>
-            </div>
+  const handleSave = () => {
+    const value = parseFloat(newCapital);
+    if (!isNaN(value) && value >= 0) {
+      onUpdateCapital(value);
+    } else {
+      Swal.fire({ title: 'Error', text: 'Por favor, ingresa un valor numérico válido.', icon: 'error', confirmButtonText: 'Entendido' })
+    }
+  };
 
-            {/* NUEVA TARJETA MEJORADA */}
-            <div className="bg-gradient-to-br from-white to-gray-50 p-8 rounded-3xl shadow-2xl border border-gray-100">
-                {/* Header */}
-                <div className="mb-6">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2.5 bg-red-100 rounded-xl">
-                            <RefreshCw className="text-red-600" size={24} />
-                        </div>
-                        <h3 className="text-2xl font-bold text-gray-800">
-                            Actualizar Capital Invertido
-                        </h3>
-                    </div>
-                    <p className="text-gray-500 text-sm ml-14">
-                        Actualiza el monto total de capital disponible para préstamos
-                    </p>
-                </div>
+  const isDisabled = loading || parseFloat(newCapital) === totalCapital || !newCapital || parseFloat(newCapital) <= 0;
 
-                {/* Current Capital Display */}
-                <div className="bg-gradient-to-r from-red-50 to-orange-50 p-5 rounded-2xl mb-6 border border-red-100">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white rounded-lg shadow-sm">
-                                <TrendingUp className="text-red-600" size={20} />
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">
-                                    Capital Actual
-                                </p>
-                                <p className="text-3xl font-bold text-red-600">
-                                    {formatCurrency(totalCapital)}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Input Section */}
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="newCapitalInput" className="block text-sm font-semibold text-gray-700 mb-2">
-                            Nuevo Capital
-                        </label>
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <DollarSign className="text-gray-400" size={20} />
-                            </div>
-                            <input
-                                id="newCapitalInput"
-                                type="text"
-                                value={formatInputCurrency(newCapital)}
-                                onChange={handleInputChange}
-                                placeholder="Ej. $ 30.000.000"
-                                className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl bg-white text-gray-900 text-lg font-medium focus:ring-2 focus:ring-red-500 focus:border-red-500 shadow-sm transition-all placeholder:text-gray-400"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Save Button */}
-                    <button
-                        onClick={handleSave}
-                        disabled={isDisabled}
-                        className="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed disabled:shadow-none flex items-center justify-center gap-2"
-                    >
-                        {loading ? (
-                            <>
-                                <RefreshCw className="animate-spin" size={20} />
-                                Guardando...
-                            </>
-                        ) : (
-                            <>
-                                <RefreshCw size={20} />
-                                Guardar Capital
-                            </>
-                        )}
-                    </button>
-                </div>
-
-                {/* Helper Text */}
-                {newCapital && parseFloat(newCapital) !== totalCapital && parseFloat(newCapital) > 0 && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-700">
-                            <span className="font-semibold">Cambio: </span>
-                            {formatCurrency(totalCapital)} → {formatCurrency(parseFloat(newCapital))}
-                        </p>
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="p-6 space-y-8 max-w-2xl mx-auto pb-24">
+      {/* Encabezado Principal Apex Style */}
+      <div className="flex flex-col items-center mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles size={18} className="text-blue-500 animate-pulse" />
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Panel de Control</span>
         </div>
-    );
+        <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic leading-none text-center">
+          Configuración <span className="text-blue-600">Global</span>
+        </h1>
+        <div className="h-1.5 w-16 bg-blue-600 mx-auto mt-4 rounded-full shadow-lg shadow-blue-100"></div>
+      </div>
+
+      {/* Resumen de Capital - Tarjeta Flotante Dark */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden border border-white/5">
+        <div className="absolute top-[-10%] right-[-10%] w-40 h-40 bg-blue-600/20 rounded-full blur-[60px]"></div>
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="bg-white/10 p-2.5 rounded-2xl backdrop-blur-md">
+              <TrendingUp size={24} className="text-cyan-400" />
+            </div>
+            <p className="text-cyan-100 text-xs font-black uppercase tracking-widest">Saldo Disponible</p>
+          </div>
+
+          <p className="text-4xl sm:text-5xl font-black tracking-tighter mb-6 leading-none">
+            {formatCurrency(saldoDisponible)}
+          </p>
+
+          <div className="grid grid-cols-2 gap-4 pt-6 border-t border-white/10">
+            <div>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1">Capital Invertido</p>
+              <p className="text-sm font-black text-white">{formatCurrency(totalCapital)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1">En Préstamos</p>
+              <p className="text-sm font-black text-rose-400">{formatCurrency(totalSaldoPendiente)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tarjeta de Actualización de Capital */}
+      <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.08)] border border-slate-100">
+        <div className="p-8 pb-4 bg-slate-50/50 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-blue-100 rounded-xl">
+              <RefreshCw className="text-blue-600" size={20} />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 uppercase italic">Inversión</h3>
+          </div>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest ml-12">Modificar capital operativo del sistema</p>
+        </div>
+
+        <div className="p-8 space-y-6">
+          <div className="group">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Monto de Capital</label>
+            <div className="relative">
+              <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500 font-bold" size={20} />
+              <input
+                type="text"
+                value={formatInputCurrency(newCapital)}
+                onChange={handleInputChange}
+                className="w-full bg-slate-50 border border-slate-200 rounded-3xl py-5 pl-12 pr-6 text-slate-700 text-xl font-black outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={isDisabled}
+            className="w-full py-5 rounded-[22px] font-black text-white uppercase tracking-[0.15em] text-sm shadow-xl shadow-blue-200 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all transform active:scale-95 disabled:opacity-50 disabled:grayscale flex justify-center items-center gap-3"
+          >
+            {loading ? <RefreshCw className="animate-spin" size={20} /> : <Check size={20} strokeWidth={3} />}
+            <span>Aplicar Cambio de Capital</span>
+          </button>
+        </div>
+      </div>
+
+      {/* SECCIÓN DE SEGURIDAD (PIN) */}
+      <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.08)] border border-slate-100">
+        <div className="p-8 pb-4 bg-slate-50/50 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-amber-100 rounded-xl">
+              <Smartphone className="text-amber-600" size={20} />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 uppercase italic">Seguridad</h3>
+          </div>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest ml-12">Control de acceso administrativo</p>
+        </div>
+
+        <div className="p-8 space-y-6">
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Actualizar PIN de Acceso</label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                maxLength="4"
+                id="newPinInput"
+                placeholder="****"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl py-4 text-center text-xl font-black tracking-[1em] outline-none focus:bg-white focus:border-amber-500 transition-all"
+                onKeyPress={(e) => !/[0-9]/.test(e.key) && e.preventDefault()}
+              />
+              <button
+                onClick={() => {
+                  const val = document.getElementById('newPinInput').value;
+                  if (val.length === 4) onUpdatePin(val);
+                  else Swal.fire('Error', 'El PIN debe ser de 4 dígitos', 'error');
+                }}
+                className="bg-slate-900 text-white px-6 rounded-2xl font-black uppercase text-xs hover:bg-slate-800 transition-all active:scale-95 shadow-lg"
+              >
+                Cambiar
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={onLogout}
+            className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 transition-all active:scale-95"
+          >
+            <X size={16} strokeWidth={3} /> Bloquear Aplicación
+          </button>
+        </div>
+      </div>
+
+      <div className="text-center pt-4 opacity-50">
+        <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.5em]">Apex Finance v2.0 • Secured Environment</p>
+      </div>
+    </div>
+  );
 };
 
 const LoginScreen = ({ pin, setPin, onVerify }) => {
-    const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "delete"];
+  const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "delete"];
 
-    const handlePress = (val) => {
-      if (val === "delete") {
-        setPin(pin.slice(0, -1));
-      } else if (val !== "" && pin.length < 4) {
-        const newPin = pin + val;
-        setPin(newPin);
-        if (newPin.length === 4) onVerify(newPin);
-      }
-    };
+  const handlePress = (val) => {
+    if (val === "delete") {
+      setPin(pin.slice(0, -1));
+    } else if (val !== "" && pin.length < 4) {
+      const newPin = pin + val;
+      setPin(newPin);
+      if (newPin.length === 4) onVerify(newPin);
+    }
+  };
 
-    return (
-      <div className="fixed inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-[1000] p-6 overflow-hidden">
-        {/* Efectos de Luces de Fondo (Acorde a tu gradiente de Apex) */}
-        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-cyan-500/20 rounded-full blur-[120px]"></div>
+  return (
+    <div className="fixed inset-0 bg-[#0f172a] flex flex-col items-center justify-center z-[1000] p-6 overflow-hidden">
+      {/* Efectos de Luces de Fondo (Acorde a tu gradiente de Apex) */}
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[120px]"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-cyan-500/20 rounded-full blur-[120px]"></div>
 
-        <div className="relative flex flex-col items-center w-full max-w-xs animate-in fade-in zoom-in duration-500">
-          {/* Logo / Icono Superior */}
-          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2.5rem] mb-8 shadow-2xl shadow-blue-500/20 border border-white/10">
-            <Smartphone className="text-white" size={42} />
-          </div>
-          
-          <h1 className="text-white text-3xl font-black tracking-tighter mb-2 italic">
-            APEX <span className="text-cyan-400">FINANCE</span>
-          </h1>
-          <p className="text-slate-400 text-sm font-medium mb-12 tracking-widest uppercase">Seguridad Requerida</p>
+      <div className="relative flex flex-col items-center w-full max-w-xs animate-in fade-in zoom-in duration-500">
+        {/* Logo / Icono Superior */}
+        <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-5 rounded-[2.5rem] mb-8 shadow-2xl shadow-blue-500/20 border border-white/10">
+          <Smartphone className="text-white" size={42} />
+        </div>
 
-          {/* Visualizador de PIN (Círculos que brillan) */}
-          <div className="flex gap-6 mb-16">
-            {[1, 2, 3, 4].map((_, i) => (
-              <div
-                key={i}
-                className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${
-                  pin.length > i 
-                  ? 'bg-cyan-400 border-cyan-400 scale-125 shadow-[0_0_20px_rgba(34,211,238,0.8)]' 
-                  : 'border-slate-700 bg-transparent'
+        <h1 className="text-white text-3xl font-black tracking-tighter mb-2 italic">
+          APEX <span className="text-cyan-400">FINANCE</span>
+        </h1>
+        <p className="text-slate-400 text-sm font-medium mb-12 tracking-widest uppercase">Seguridad Requerida</p>
+
+        {/* Visualizador de PIN (Círculos que brillan) */}
+        <div className="flex gap-6 mb-16">
+          {[1, 2, 3, 4].map((_, i) => (
+            <div
+              key={i}
+              className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${pin.length > i
+                ? 'bg-cyan-400 border-cyan-400 scale-125 shadow-[0_0_20px_rgba(34,211,238,0.8)]'
+                : 'border-slate-700 bg-transparent'
                 }`}
-              ></div>
-            ))}
-          </div>
+            ></div>
+          ))}
+        </div>
 
-          {/* Teclado Numérico Estilizado */}
-          <div className="grid grid-cols-3 gap-5 w-full">
-            {digits.map((d, i) => (
-              <button
-                key={i}
-                onClick={() => handlePress(d)}
-                className={`h-20 w-20 rounded-3xl flex items-center justify-center text-2xl font-bold transition-all active:scale-90 active:bg-blue-600 ${
-                  d === "" ? "opacity-0 pointer-events-none" : 
-                  d === "delete" ? "text-slate-400 hover:text-white" : 
+        {/* Teclado Numérico Estilizado */}
+        <div className="grid grid-cols-3 gap-5 w-full">
+          {digits.map((d, i) => (
+            <button
+              key={i}
+              onClick={() => handlePress(d)}
+              className={`h-20 w-20 rounded-3xl flex items-center justify-center text-2xl font-bold transition-all active:scale-90 active:bg-blue-600 ${d === "" ? "opacity-0 pointer-events-none" :
+                d === "delete" ? "text-slate-400 hover:text-white" :
                   "text-white bg-slate-800/40 hover:bg-slate-800/60 border border-white/5 backdrop-blur-md shadow-sm"
                 }`}
-              >
-                {d === "delete" ? <X size={28} /> : d}
-              </button>
-            ))}
-          </div>
-          
-          <p className="mt-12 text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em]">
-            Authorized Personnel Only
-          </p>
+            >
+              {d === "delete" ? <X size={28} /> : d}
+            </button>
+          ))}
         </div>
+
+        <p className="mt-12 text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em]">
+          Authorized Personnel Only
+        </p>
       </div>
-    );
+    </div>
+  );
 };
 
 export default LoanAdminApp;

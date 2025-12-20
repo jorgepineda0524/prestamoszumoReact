@@ -1,145 +1,172 @@
-// UserForm.jsx
-import React, { useState } from 'react';
-import { X, ArrowLeft, User, Smartphone, CreditCard, Mail, MapPin, CheckCircle, RefreshCw } from 'lucide-react'; 
-import Swal from 'sweetalert2';
+import React, { useState, useEffect } from 'react';
+import { User, CreditCard, Phone, MapPin, Mail, X, Check, ArrowLeft, RefreshCw, Sparkles, UserPlus } from 'lucide-react';
 
-const UserForm = ({ isComisionistaMode, clientToEdit, onSaveClient, onSaveComisionista, onCancel, onBackToSelection, loading }) => {
-    
-    const initialFormState = {
-        nombre: clientToEdit?.nombre || '',
-        cedula: clientToEdit?.cedula || '',
-        telefono: clientToEdit?.telefono || '',
-        direccion: clientToEdit?.direccion || '',
-        email: clientToEdit?.email || ''
-    };
-    
-    const [formData, setFormData] = useState(initialFormState);
-    const isEditing = !!clientToEdit;
-    const entityType = isComisionistaMode ? 'Comisionista' : 'Cliente';
-    const title = isEditing ? `Editar ${entityType}` : `Nuevo ${entityType}`;
+const UserForm = ({ isComisionistaMode, clientToEdit, onSaveClient, onSaveComisionista, loading, onCancel, onBackToSelection }) => {
+    const [formData, setFormData] = useState({
+        nombre: '',
+        cedula: '',
+        telefono: '',
+        direccion: '',
+        email: ''
+    });
 
-    // CONFIGURACIÓN DE COLORES DINÁMICOS
-    // Si es comisionista -> Verde | Si es cliente -> Azul
-    const theme = {
-        gradient: isComisionistaMode ? 'from-emerald-600 to-teal-400' : 'from-blue-600 to-sky-500',
-        accentText: isComisionistaMode ? 'text-emerald-500' : 'text-blue-500',
-        accentBg: isComisionistaMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700',
-        ring: isComisionistaMode ? 'focus:ring-emerald-500/10 focus:border-emerald-500' : 'focus:ring-blue-500/10 focus:border-blue-500',
-        shadow: isComisionistaMode ? 'shadow-emerald-200' : 'shadow-blue-200',
-        subtext: isComisionistaMode ? 'text-emerald-100' : 'text-blue-100'
-    };
+    useEffect(() => {
+        if (clientToEdit) {
+            setFormData({
+                nombre: clientToEdit.nombre || '',
+                cedula: clientToEdit.cedula || '',
+                telefono: clientToEdit.telefono || '',
+                direccion: clientToEdit.direccion || '',
+                email: clientToEdit.email || ''
+            });
+        }
+    }, [clientToEdit]);
 
-    const handleInputChange = (e) => {
+    const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleFormSubmit = (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        if (!formData.nombre || !formData.telefono) {
-            Swal.fire({ 
-                title: 'Atención', 
-                text: 'El nombre y teléfono son requeridos.', 
-                icon: 'warning',
-                confirmButtonColor: isComisionistaMode ? '#059669' : '#3b82f6'
-            });
-            return;
+        if (isComisionistaMode) {
+            onSaveComisionista(formData);
+        } else {
+            onSaveClient(formData);
         }
-        isComisionistaMode ? onSaveComisionista(formData) : onSaveClient(formData); 
     };
 
-    const fields = isComisionistaMode 
-        ? [
-            { name: 'nombre', label: 'Nombre Completo', icon: <User size={18}/> },
-            { name: 'cedula', label: 'Identificación / Cédula', icon: <CreditCard size={18}/> },
-            { name: 'telefono', label: 'Teléfono de Contacto', icon: <Smartphone size={18}/> },
-            { name: 'email', label: 'Correo Electrónico', icon: <Mail size={18}/> }
-          ]
-        : [
-            { name: 'nombre', label: 'Nombre Completo', icon: <User size={18}/> },
-            { name: 'cedula', label: 'Identificación / Cédula', icon: <CreditCard size={18}/> },
-            { name: 'telefono', label: 'Teléfono de Contacto', icon: <Smartphone size={18}/> },
-            { name: 'direccion', label: 'Dirección de Residencia', icon: <MapPin size={18}/> },
-            { name: 'email', label: 'Correo Electrónico', icon: <Mail size={18}/> }
-          ];
-            
     return (
-        <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-100 animate-in fade-in zoom-in duration-300">
-            {/* Header Dinámico (Verde o Azul) */}
-            <div className={`bg-gradient-to-r ${theme.gradient} p-6 text-white flex justify-between items-center shadow-lg`}>
-                <div className="flex items-center">
-                    {!isEditing && (
-                         <button 
-                            onClick={onBackToSelection} 
-                            className="p-2 mr-3 rounded-full bg-white/20 hover:bg-white/30 transition-all active:scale-90"
-                        >
-                            <ArrowLeft size={20} />
-                        </button>
-                    )}
-                    <div>
-                        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-                        <p className={`${theme.subtext} text-[10px] font-bold uppercase tracking-[0.2em] mt-0.5 flex items-center gap-1`}>
-                            <CheckCircle size={10} /> Sistema de Gestión Apex
-                        </p>
+        <div className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.1)] animate-in fade-in zoom-in duration-300 border border-slate-100 relative">
+
+            {/* Header con gradiente suave y tipografía Apex */}
+            <div className="p-8 pb-6 bg-gradient-to-b from-slate-50 to-white border-b border-slate-100">
+                <div className="flex justify-between items-center mb-6">
+                    <button
+                        onClick={onBackToSelection}
+                        className="bg-slate-100 p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all active:scale-90"
+                        type="button"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div className="flex items-center gap-2">
+                        <Sparkles size={18} className="text-blue-500 animate-pulse" />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Sistema de Registro</span>
                     </div>
+                    <button
+                        onClick={onCancel}
+                        className="bg-slate-100 p-2.5 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-90"
+                    >
+                        <X size={20} />
+                    </button>
                 </div>
-                <button onClick={onCancel} className="p-2 rounded-full hover:bg-white/20 transition-colors">
-                    <X size={24} />
-                </button>
+
+                <div className="text-center">
+                    <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">
+                        {clientToEdit ? 'Actualizar' : 'Nuevo'}{' '}
+                        <span className={isComisionistaMode ? 'text-emerald-500' : 'text-blue-600'}>
+                            {isComisionistaMode ? 'Comisionista' : 'Cliente'}
+                        </span>
+                    </h2>
+                    <div className={`h-1 w-12 mx-auto mt-2 rounded-full ${isComisionistaMode ? 'bg-emerald-500' : 'bg-blue-600'}`}></div>
+                </div>
             </div>
 
-            {/* Cuerpo del Formulario */}
-            <form onSubmit={handleFormSubmit} className="p-8 space-y-5 overflow-y-auto bg-slate-50/50">
-                {fields.map(field => (
-                    <div key={field.name} className="space-y-1.5">
-                        <label htmlFor={field.name} className="flex items-center gap-2 text-sm font-bold text-slate-600 ml-1">
-                            <span className={theme.accentText}>{field.icon}</span>
-                            {field.label}
-                            {(field.name === 'nombre' || field.name === 'telefono') && (
-                                <span className={`${theme.accentText} font-black`}>*</span>
-                            )}
-                        </label>
+            <form onSubmit={handleSubmit} className="p-8 space-y-5">
+                {/* Inputs con estilo minimalista y profesional */}
+                <div className="space-y-4">
+                    {/* Nombre */}
+                    <div className="group">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Nombre del Titular</label>
                         <div className="relative">
+                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500 transition-colors" size={18} />
                             <input
-                                id={field.name}
-                                type={field.name === 'email' ? 'email' : (field.name === 'telefono' ? 'tel' : 'text')}
-                                name={field.name}
-                                value={formData[field.name]}
-                                onChange={handleInputChange}
-                                placeholder={`Escribe aquí...`}
-                                className={`w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl transition-all placeholder:text-slate-300 text-slate-700 shadow-sm focus:ring-4 focus:outline-none ${theme.ring}`}
+                                required
+                                name="nombre"
+                                value={formData.nombre}
+                                onChange={handleChange}
+                                placeholder="Escribe el nombre completo"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 placeholder:text-slate-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/5 transition-all font-bold"
                             />
                         </div>
                     </div>
-                ))}
-                
-                <div className="pt-6">
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Cédula */}
+                        <div className="group">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Identificación</label>
+                            <div className="relative">
+                                <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500" size={18} />
+                                <input
+                                    name="cedula"
+                                    value={formData.cedula}
+                                    onChange={handleChange}
+                                    placeholder="Número de cédula"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 placeholder:text-slate-400 outline-none focus:bg-white focus:border-blue-500 transition-all font-bold"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Teléfono */}
+                        <div className="group">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Línea Móvil</label>
+                            <div className="relative">
+                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500" size={18} />
+                                <input
+                                    required
+                                    name="telefono"
+                                    value={formData.telefono}
+                                    onChange={handleChange}
+                                    placeholder="300 000 0000"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 placeholder:text-slate-400 outline-none focus:bg-white focus:border-blue-500 transition-all font-bold"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Dirección (Solo Clientes) */}
+                    {!isComisionistaMode && (
+                        <div className="group">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-1.5 block">Dirección de Cobro</label>
+                            <div className="relative">
+                                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-500" size={18} />
+                                <input
+                                    name="direccion"
+                                    value={formData.direccion}
+                                    onChange={handleChange}
+                                    placeholder="Ubicación de residencia"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-slate-700 placeholder:text-slate-400 outline-none focus:bg-white focus:border-blue-500 transition-all font-bold"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Botón de Acción Principal */}
+                <div className="pt-4">
                     <button
                         type="submit"
-                        disabled={loading} 
-                        className={`w-full ${theme.accentBg} text-white py-4 rounded-2xl font-bold shadow-xl ${theme.shadow} 
-                            transition-all flex justify-center items-center gap-2 text-lg
-                            ${loading 
-                                ? 'opacity-50 cursor-not-allowed scale-100' 
-                                : 'hover:-translate-y-1 active:scale-[0.98]' 
+                        disabled={loading}
+                        className={`w-full py-5 rounded-[22px] font-black text-white uppercase tracking-[0.15em] text-sm shadow-xl transition-all active:scale-95 disabled:opacity-50 flex justify-center items-center gap-3 ${isComisionistaMode
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 shadow-emerald-200'
+                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-200'
                             }`}
                     >
                         {loading ? (
-                            <>
-                                <RefreshCw className="animate-spin" size={22} />
-                                <span>Procesando...</span>
-                            </>
+                            <RefreshCw size={20} className="animate-spin" />
                         ) : (
-                            <span>{isEditing ? `Actualizar Datos` : `Crear ${entityType}`}</span>
+                            <>
+                                <Check size={20} strokeWidth={3} />
+                                {clientToEdit ? 'Guardar Cambios' : `Registrar ${isComisionistaMode ? 'Socio' : 'Cliente'}`}
+                            </>
                         )}
                     </button>
-                    
-                    {loading && (
-                        <p className={`text-center mt-2 text-xs font-bold animate-pulse ${isComisionistaMode ? 'text-emerald-600' : 'text-blue-600'}`}>
-                            Guardando en la base de datos, por favor espera...
-                        </p>
-                    )}
                 </div>
             </form>
+
+            {/* Footer sutil */}
+            <div className="p-5 bg-slate-50 border-t border-slate-100 text-center">
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.2em]">Administración de Activos Apex</p>
+            </div>
         </div>
     );
 };
