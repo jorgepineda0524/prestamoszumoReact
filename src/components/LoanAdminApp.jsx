@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent, FileSpreadsheet, Smartphone, X, Check, CheckCircle, Search, Sparkles, CreditCard, UserPlus } from 'lucide-react';
+import { Home, Users, DollarSign, FileText, Settings, Trash2, Eye, Plus, TrendingUp, RefreshCw, Receipt, Clock, Calendar, UserCheck, Percent, FileSpreadsheet, Smartphone, X, Check, CheckCircle, Search, Sparkles, CreditCard, UserPlus, Bell } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import UserForm from './UserForm';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
 import PaymentForm from './PaymentForm';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const LoanAdminApp = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -74,6 +75,7 @@ const LoanAdminApp = () => {
   const handleVerifyPin = (enteredPin) => {
     if (enteredPin === SECURITY_PIN) {
       setIsAuthenticated(true);
+      programarAlertaManana();
       if (navigator.vibrate) navigator.vibrate(50);
     } else {
       setTimeout(() => {
@@ -163,7 +165,15 @@ const LoanAdminApp = () => {
     try {
       const { data, error } = await supabase
         .from('prestamos')
-        .select('*, clientes(nombre)')
+        .select(`
+        *,
+        clientes (nombre),
+        registro_comisiones (
+          monto_comision,
+          porcentaje_aplicado,
+          comisionistas (nombre)
+        )
+      `)
         .eq('estado', 'activo')
         .order('fecha_inicio', { ascending: false });
 
@@ -428,13 +438,6 @@ const LoanAdminApp = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
   const handleLoanInputChange = (e) => {
     const { name, value } = e.target;
     let newValue = value;
@@ -473,14 +476,14 @@ const LoanAdminApp = () => {
     }));
   };
 
-  const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-  const diaHoy = diasSemana[new Date().getDay()];
+  const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const hoyNombre = diasSemana[new Date().getDay()];
 
   const pagosHoy = loans.filter(loan => {
     if (loan.estado !== 'activo') return false;
     const modalidad = loan.modalidad?.toLowerCase();
     if (modalidad.includes('semanal')) return true;
-    return loan.dia_pago?.toLowerCase() === diaHoy;
+    return loan.dia_pago?.toLowerCase() === hoyNombre;
   });
 
   const formatInputCurrency = (amount) => {
@@ -937,68 +940,54 @@ const LoanAdminApp = () => {
             {/* 4. COBROS DE HOY */}
             <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
-                <div className="flex flex-col">
-                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">Cobros de Hoy</h2>
-                  <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tighter">
-                    {diaHoy}, {new Date().toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-[10px] font-black italic shadow-lg shadow-blue-200">
-                  {pagosHoy.length} PENDIENTES
-                </div>
+                <h2 className="text-xl font-black text-slate-800 italic uppercase">
+                  Cobros de Hoy <span className="text-blue-600">({hoyNombre})</span>
+                </h2>
+                <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+                  {new Date().toLocaleDateString()}
+                </span>
               </div>
 
-              <div className="space-y-3">
-                {pagosHoy.length > 0 ? (
-                  pagosHoy.map((loan) => (
-                    <div key={loan.id} className="bg-white border border-slate-100 p-5 rounded-[2.2rem] flex items-center justify-between shadow-sm group active:scale-95 transition-all">
-                      <div className="flex items-center gap-4">
-                        {/* Indicador de estado de pago */}
-                        <div className="relative">
-                          <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:bg-blue-600 transition-colors">
-                            <Clock size={24} className="text-slate-400 group-hover:text-white transition-colors" />
-                          </div>
-                          <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 border-4 border-white rounded-full"></div>
-                        </div>
-
-                        <div className="min-w-0">
-                          <p className="font-black text-slate-800 text-base truncate uppercase tracking-tight leading-none mb-1">
-                            {loan.clientes?.nombre}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md uppercase">
-                              {loan.modalidad}
-                            </span>
-                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-tighter">
-                              Cuota: <span className="text-slate-900">{formatCurrency(loan.cuota_monto || (loan.total_a_pagar / loan.numero_cuotas))}</span>
-                            </p>
-                          </div>
+              {loans.filter(loan => loan.dia_cobro === hoyNombre).length === 0 ? (
+                <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] p-10 text-center">
+                  <p className="text-slate-400 font-bold uppercase tracking-widest text-xs italic">
+                    No hay cobros programados para este día
+                  </p>
+                </div>
+              ) : (
+                loans
+                  .filter(loan => loan.dia_cobro === hoyNombre)
+                  .map((loan) => (
+                    <div key={loan.id} className="bg-white border-l-[6px] border-blue-600 rounded-r-[2rem] rounded-l-lg shadow-md p-5 flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-slate-400 uppercase tracking-widest mb-1">Cliente</p>
+                        <p className="text-lg font-black text-slate-800 uppercase truncate">
+                          {loan.clientes?.nombre}
+                        </p>
+                        <div className="flex gap-2 mt-2">
+                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+                            {loan.modalidad}
+                          </span>
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          // Aquí podrías abrir el modal de abono directamente
-                          setSelectedLoan(loan);
-                          setIsPaymentModalOpen(true);
-                        }}
-                        className="bg-slate-900 p-3 rounded-2xl text-white shadow-lg hover:bg-blue-600 transition-all active:scale-90"
-                      >
-                        <DollarSign size={20} />
-                      </button>
+                      <div className="text-right ml-4">
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Cuota Semanal</p>
+                        <p className="text-xl font-black text-blue-600 italic">
+                          {/* EDITAR ESTA LÍNEA: Calcula el total dividido por el número de semanas */}
+                          {formatCurrency(loan.total_a_pagar / (loan.plazo_dias / 7))}
+                        </p>
+
+                        <button
+                          onClick={() => handleNavigateToPayment(loan.id)}
+                          className="mt-2 bg-slate-900 text-white p-2 rounded-xl shadow-lg active:scale-90 transition-all"
+                        >
+                          <DollarSign size={20} strokeWidth={3} />
+                        </button>
+                      </div>
                     </div>
                   ))
-                ) : (
-                  /* Estado cuando no hay cobros */
-                  <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] p-12 text-center">
-                    <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                      <CheckCircle size={32} className="text-emerald-500" />
-                    </div>
-                    <p className="text-slate-800 text-sm font-black uppercase italic tracking-widest">¡Día Completado!</p>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase mt-1">No hay cobros pendientes para hoy</p>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Footer sutil */}
@@ -1523,71 +1512,99 @@ const LoanAdminApp = () => {
                 )}
 
                 {/* TABLA DE PRÉSTAMOS (Sigue siendo tu tabla genial pero con bordes redondeados premium) */}
-                <div className="bg-white rounded-[2.5rem] shadow-lg overflow-hidden border border-slate-100">
+                <div className="space-y-4 animate-in fade-in duration-500 pb-24">
                   {loading ? (
-                    <div className="p-12 text-center text-slate-400 font-black uppercase tracking-widest text-[10px]">Sincronizando base de datos...</div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-slate-50 border-b border-slate-100">
-                          <tr>
-                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Préstamo</th>
-                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Cuota</th>
-                            <th className="px-4 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Progreso</th>
-                            <th className="px-4 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {filteredLoans.length === 0 ? (
-                            <tr>
-                              <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs italic">No hay registros disponibles</td>
-                            </tr>
-                          ) : (
-                            filteredLoans.map((loan) => {
-                              const cuotaSemanal = loan.total_a_pagar / (loan.plazo_dias / 7);
-                              const progresoPago = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
-                              return (
-                                <tr key={loan.id} className="hover:bg-blue-50/40 transition-colors">
-                                  <td className="px-4 py-4">
-                                    <div className="cursor-pointer" onClick={() => handleNavigateToPayment(loan.id)}>
-                                      <p className="font-bold text-slate-800 text-sm">{loan.clientes?.nombre}</p>
-                                      <div className="flex items-center gap-1.5 mt-1">
-                                        <span className="bg-blue-50 text-blue-600 text-[9px] px-2 py-0.5 rounded-md font-black uppercase border border-blue-100">Cobra: {loan.dia_cobro}</span>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4 text-sm font-bold text-slate-700">
-                                    {formatCurrency(loan.monto_prestado)}
-                                    <span className="block text-[10px] text-orange-600 font-black">+{loan.tasa_interes}% INT</span>
-                                  </td>
-                                  <td className="px-4 py-4">
-                                    <div className="bg-blue-600 text-white px-2.5 py-1.5 rounded-xl inline-block shadow-sm">
-                                      <p className="text-[11px] font-black tracking-tight">{formatCurrency(cuotaSemanal)}</p>
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4">
-                                    <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase mb-1">
-                                      <span>Saldo: {formatCurrency(loan.saldo_pendiente)}</span>
-                                    </div>
-                                    <div className="w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                      <div className="bg-emerald-500 h-full transition-all" style={{ width: `${progresoPago}%` }} />
-                                    </div>
-                                    <p className="text-[9px] font-black text-emerald-600 mt-1">{progresoPago.toFixed(0)}% Pagado</p>
-                                  </td>
-                                  <td className="px-4 py-4">
-                                    <div className="flex gap-1 justify-center">
-                                      <button onClick={() => setSelectedLoan(loan)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Eye size={18} /></button>
-                                      <button onClick={() => handleDeleteLoan(loan)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={18} /></button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
+                    <div className="p-12 text-center text-slate-400 font-black uppercase tracking-widest text-xs">Cargando Cartera...</div>
+                  ) : filteredLoans.length === 0 ? (
+                    <div className="bg-white rounded-[2.5rem] p-12 text-center border-2 border-dashed border-slate-100">
+                      <p className="text-slate-400 font-bold uppercase tracking-widest text-sm italic">No hay registros activos</p>
                     </div>
+                  ) : (
+                    filteredLoans.map((loan, index) => {
+                      const progreso = ((loan.total_a_pagar - loan.saldo_pendiente) / loan.total_a_pagar) * 100;
+
+                      // Paleta de colores Premium para diferenciar cada tarjeta
+                      const themes = [
+                        { border: 'border-l-blue-600', lightBg: 'bg-blue-50', text: 'text-blue-700', btn: 'bg-blue-600', shadow: 'shadow-blue-100' },
+                        { border: 'border-l-emerald-600', lightBg: 'bg-emerald-50', text: 'text-emerald-700', btn: 'bg-emerald-600', shadow: 'shadow-emerald-100' },
+                        { border: 'border-l-violet-600', lightBg: 'bg-violet-50', text: 'text-violet-700', btn: 'bg-violet-600', shadow: 'shadow-violet-100' },
+                        { border: 'border-l-orange-600', lightBg: 'bg-orange-50', text: 'text-orange-700', btn: 'bg-orange-600', shadow: 'shadow-orange-100' }
+                      ];
+                      const theme = themes[index % themes.length];
+
+                      return (
+                        <div key={loan.id} className={`bg-white border-l-[6px] ${theme.border} rounded-r-[2rem] rounded-l-lg shadow-md overflow-hidden transition-all active:scale-[0.98]`}>
+                          <div className="p-5">
+                            {/* Cabecera: Nombre y Monto Principal */}
+                            <div className="flex justify-between items-start mb-4">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-lg font-black text-slate-800 uppercase tracking-tight leading-tight truncate">
+                                  {loan.clientes?.nombre}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${theme.lightBg} ${theme.text}`}>
+                                    Cobra: {loan.dia_cobro}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                    {loan.modalidad}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right ml-4">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Saldo</p>
+                                <p className={`text-xl font-black italic leading-none ${theme.text}`}>
+                                  {formatCurrency(loan.saldo_pendiente)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Visualizador de Progreso - Grande y Claro */}
+                            <div className="space-y-2 mb-5">
+                              <div className="flex justify-between items-center px-1">
+                                <p className="text-[11px] font-black text-slate-500 uppercase">Progreso del Crédito</p>
+                                <p className="text-[11px] font-black text-emerald-600">{progreso.toFixed(0)}% Pagado</p>
+                              </div>
+                              <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-50 shadow-inner">
+                                <div
+                                  className={`h-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,0,0,0.1)] ${theme.btn.replace('bg-', 'bg-')}`}
+                                  style={{ width: `${progreso}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Barra de Acciones Estilo Píldora */}
+                            <div className="flex items-center gap-2 pt-2">
+                              {/* Botón de PAGO (El más importante) */}
+                              <button
+                                onClick={() => handleNavigateToPayment(loan.id)}
+                                className={`flex-[2] flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-black text-xs uppercase tracking-widest shadow-lg ${theme.btn} ${theme.shadow} active:scale-95 transition-all`}
+                              >
+                                <DollarSign size={18} strokeWidth={3} />
+                                Cobrar Cuota
+                              </button>
+
+                              {/* Botón DETALLE */}
+                              <button
+                                onClick={() => setSelectedLoan(loan)}
+                                className="flex-1 flex items-center justify-center py-3.5 rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"
+                                title="Ver Detalle"
+                              >
+                                <Eye size={20} strokeWidth={2.5} />
+                              </button>
+
+                              {/* Botón ELIMINAR */}
+                              <button
+                                onClick={() => handleDeleteLoan(loan)}
+                                className="flex-1 flex items-center justify-center py-3.5 rounded-2xl bg-rose-50 text-rose-500 hover:bg-rose-100 active:scale-95 transition-all"
+                                title="Eliminar"
+                              >
+                                <Trash2 size={20} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
 
@@ -1602,7 +1619,7 @@ const LoanAdminApp = () => {
               </>
             )}
 
-            {/* 6. VISTA DE COMISIONES (Mantenemos tu lógica pero dentro del nuevo contenedor) */}
+            {/* 6. VISTA DE COMISIONES */}
             {loanSubTab === 'commissions' && (
               <div className="space-y-4 animate-in fade-in duration-500">
                 <div className="bg-emerald-50 border border-emerald-100 rounded-[2rem] p-6 flex items-center justify-between shadow-sm">
@@ -1755,6 +1772,160 @@ const LoanAdminApp = () => {
                 )}
               </div>
             )}
+
+            {/* MODAL DE DETALLE DE PRÉSTAMO - EXPEDIENTE COMPLETO CORREGIDO */}
+            {selectedLoan && (
+              <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-end sm:items-center justify-center z-[200] animate-in fade-in duration-300">
+                <div className="bg-white w-full sm:max-w-lg rounded-t-[3rem] sm:rounded-[3rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-500 max-h-[95vh] flex flex-col">
+
+                  {/* Header con Identidad Visual */}
+                  <div className="bg-slate-900 p-8 text-white relative">
+                    <button
+                      onClick={() => setSelectedLoan(null)}
+                      className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all active:scale-90"
+                    >
+                      <X size={24} />
+                    </button>
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="bg-blue-500 w-2 h-2 rounded-full animate-pulse"></div>
+                      <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Expediente de Cartera</p>
+                    </div>
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter leading-tight text-left pr-12">
+                      {selectedLoan.clientes?.nombre}
+                    </h2>
+                  </div>
+
+                  <div className="p-8 space-y-8 overflow-y-auto pb-12">
+
+                    {/* 1. SECCIÓN DE PROGRESO INTEGRAL */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado del Recaudo</p>
+                          <p className="text-2xl font-black text-slate-800 italic">
+                            {((selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente) / selectedLoan.total_a_pagar * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Capital Retornado</p>
+                          <p className="text-sm font-black text-slate-600">{formatCurrency(selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente)}</p>
+                        </div>
+                      </div>
+                      <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden border border-slate-50 shadow-inner p-1">
+                        <div
+                          className="bg-gradient-to-r from-blue-600 to-emerald-500 h-full rounded-full transition-all duration-1000 shadow-sm"
+                          style={{ width: `${((selectedLoan.total_a_pagar - selectedLoan.saldo_pendiente) / selectedLoan.total_a_pagar * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 2. GRID DE VALORES PRINCIPALES */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <TrendingUp size={14} className="text-blue-600" />
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Total a Pagar</p>
+                        </div>
+                        <p className="text-xl font-black text-slate-800">{formatCurrency(selectedLoan.total_a_pagar)}</p>
+                      </div>
+                      <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Percent size={14} className="text-orange-500" />
+                          <p className="text-[9px] font-black text-slate-400 uppercase">Interés Bruto</p>
+                        </div>
+                        <p className="text-xl font-black text-orange-600">
+                          {formatCurrency(selectedLoan.total_a_pagar - selectedLoan.monto_prestado)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 3. TARJETA DE TIEMPO Y PLAZOS */}
+                    <div className="bg-blue-50 border border-blue-100 p-6 rounded-[2.5rem] flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-white p-3 rounded-2xl shadow-sm text-blue-600">
+                          <Calendar size={24} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Plazo del Crédito</p>
+                          <p className="text-xl font-black text-blue-900 italic">
+                            {selectedLoan.plazo_dias / 7} Semanas
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] font-black text-blue-400 uppercase">Cobra cada</p>
+                        <p className="text-sm font-black text-blue-800 uppercase">{selectedLoan.dia_cobro}</p>
+                      </div>
+                    </div>
+
+                    {/* 4. DATOS DEL COMISIONISTA */}
+                    {selectedLoan.registro_comisiones && selectedLoan.registro_comisiones.length > 0 ? (
+                      <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-[2.5rem] animate-in zoom-in duration-300">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-emerald-500 p-2.5 rounded-2xl text-white shadow-sm">
+                              <UserCheck size={20} />
+                            </div>
+                            <div>
+                              <h3 className="text-[10px] font-black text-emerald-800 uppercase tracking-widest leading-none mb-1">Socio Comisionista</h3>
+                              <p className="text-base font-black text-emerald-900 uppercase italic">
+                                {/* Accedemos al primer registro de comisión y de ahí al nombre del comisionista */}
+                                {selectedLoan.registro_comisiones[0].comisionistas?.nombre || "Socio Asignado"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center bg-white/60 p-5 rounded-[1.5rem] border border-emerald-100 shadow-sm">
+                          <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Monto de Comisión</p>
+                            <p className="text-xl font-black text-emerald-700">
+                              {formatCurrency(selectedLoan.registro_comisiones[0].monto_comision || 0)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Estado Pago</p>
+                            <span className="bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+                              {selectedLoan.registro_comisiones[0].estado_pago || 'Pendiente'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 border border-slate-200 border-dashed p-6 rounded-[2.5rem] flex items-center gap-4 opacity-60">
+                        <div className="bg-slate-200 p-3 rounded-2xl text-slate-400">
+                          <CheckCircle size={24} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inversión Directa</p>
+                          <p className="text-xs font-bold text-slate-500 italic uppercase">Sin intermediarios</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 5. RESUMEN TÉCNICO FINAL */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 border border-slate-100 rounded-2xl">
+                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Fecha Apertura</p>
+                        <p className="text-xs font-bold text-slate-700">{new Date(selectedLoan.fecha_prestamo).toLocaleDateString()}</p>
+                      </div>
+                      <div className="p-4 border border-slate-100 rounded-2xl text-right">
+                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Fecha Vencimiento</p>
+                        <p className="text-xs font-bold text-rose-500">{new Date(selectedLoan.fecha_vencimiento).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+
+                    {/* Botón de Cierre */}
+                    <button
+                      onClick={() => setSelectedLoan(null)}
+                      className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-slate-200 active:scale-95 transition-all mt-4"
+                    >
+                      Cerrar Expediente
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -1794,6 +1965,7 @@ const LoanAdminApp = () => {
       case 'settings':
         return (
           <SettingsPage
+            loans={loans}
             totalCapital={totalCapital}
             onUpdateCapital={handleUpdateCapital}
             loading={settingsLoading}
@@ -1839,7 +2011,7 @@ const LoanAdminApp = () => {
                 { id: 'home', icon: Home, label: 'Inicio', color: 'text-blue-600', bg: 'bg-blue-50' },
                 { id: 'clients', icon: Users, label: 'Usuarios', color: 'text-indigo-600', bg: 'bg-indigo-50' },
                 { id: 'loans', icon: DollarSign, label: 'Créditos', color: 'text-violet-600', bg: 'bg-violet-50' },
-                { id: 'payments', icon: Receipt, label: 'Caja', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { id: 'payments', icon: Receipt, label: 'Pagos', color: 'text-emerald-600', bg: 'bg-emerald-50' },
                 { id: 'settings', icon: Settings, label: 'Ajustes', color: 'text-slate-800', bg: 'bg-slate-100' }
               ].map((tab) => {
                 const IsActive = activeTab === tab.id;
@@ -1884,12 +2056,75 @@ const LoanAdminApp = () => {
   );
 };
 
-const SettingsPage = ({ totalCapital, onUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente, formatInputCurrency, cleanCurrencyInput, onLogout, securityPin, onUpdatePin }) => {
+const SettingsPage = ({ loans, totalCapital, onUpdateCapital, loading, formatCurrency, saldoDisponible, totalSaldoPendiente, formatInputCurrency, cleanCurrencyInput, onLogout, securityPin, onUpdatePin }) => {
   const [newCapital, setNewCapital] = useState(totalCapital.toString());
 
   useEffect(() => {
     setNewCapital(totalCapital.toString());
   }, [totalCapital]);
+
+  useEffect(() => {
+    const checkDailyCollections = async () => {
+      const permission = await LocalNotifications.checkPermissions();
+      if (permission.display !== 'granted') {
+        await LocalNotifications.requestPermissions();
+      }
+      const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+      const hoyNombre = diasSemana[new Date().getDay()];
+      const cobrosHoy = loans.filter(l => l.dia_cobro === hoyNombre && l.estado === 'activo');
+
+      if (cobrosHoy.length > 0) {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title: "🔔 Cobros del Día",
+              body: `Tienes ${cobrosHoy.length} clientes pendientes para hoy (${hoyNombre}).`,
+              id: 1,
+              schedule: { at: new Date(Date.now() + 1000) },
+              sound: 'beep.wav',
+            }
+          ]
+        });
+      }
+    };
+
+    if (loans.length > 0) {
+      checkDailyCollections();
+    }
+  }, [loans]);
+
+  useEffect(() => {
+    if (loans.length > 0) {
+      const diasSemana = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+      const hoyNombre = diasSemana[new Date().getDay()];
+
+      const cobrosHoy = loans.filter(loan => loan.dia_cobro === hoyNombre);
+
+      if (cobrosHoy.length > 0) {
+        const totalHoy = cobrosHoy.reduce((acc, loan) => acc + (loan.total_a_pagar / (loan.plazo_dias / 7)), 0);
+
+        sendNotification(`Tienes ${cobrosHoy.length} cobros pendientes hoy. Total sugerido: ${formatCurrency(totalHoy)}`);
+      }
+    }
+  }, [loans]);
+
+  const programarAlertaManana = async () => {
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          title: "📅 Cobros del Día",
+          body: "¡Buen día! Revisa tu ruta de cobro, tienes clientes pendientes hoy.",
+          id: 2,
+          schedule: {
+            on: { hour: 9, minute: 0 },
+            repeats: true
+          },
+          allowPause: false,
+          sound: 'beep.wav'
+        }
+      ]
+    });
+  };
 
   const handleInputChange = (e) => {
     const displayValue = e.target.value;
@@ -1990,26 +2225,33 @@ const SettingsPage = ({ totalCapital, onUpdateCapital, loading, formatCurrency, 
 
       {/* SECCIÓN DE SEGURIDAD (PIN) */}
       <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.08)] border border-slate-100">
-        <div className="p-8 pb-4 bg-slate-50/50 border-b border-slate-100">
+        <div className="p-6 sm:p-8 pb-4 bg-slate-50/50 border-b border-slate-100">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-amber-100 rounded-xl">
+            <div className="p-2 bg-amber-100 rounded-xl shrink-0">
               <Smartphone className="text-amber-600" size={20} />
             </div>
-            <h3 className="text-lg font-black text-slate-800 uppercase italic">Seguridad</h3>
+            <h3 className="text-base sm:text-lg font-black text-slate-800 uppercase italic">Seguridad</h3>
           </div>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest ml-12">Control de acceso administrativo</p>
+          <p className="text-slate-400 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest ml-11 sm:ml-12">
+            Control de acceso administrativo
+          </p>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-6 sm:p-8 space-y-6">
           <div>
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Actualizar PIN de Acceso</label>
-            <div className="flex gap-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block text-center sm:text-left">
+              Actualizar PIN de Acceso
+            </label>
+
+            {/* Contenedor Flex: Cambia a columna en pantallas muy pequeñas (< 400px aprox) */}
+            <div className="flex flex-col xs:flex-row gap-3">
               <input
                 type="password"
                 maxLength="4"
                 id="newPinInput"
                 placeholder="****"
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl py-4 text-center text-xl font-black tracking-[1em] outline-none focus:bg-white focus:border-amber-500 transition-all"
+                inputMode="numeric"
+                className="w-full xs:flex-1 bg-slate-50 border border-slate-200 rounded-2xl py-4 text-center text-xl font-black tracking-[1em] outline-none focus:bg-white focus:border-amber-500 transition-all shadow-inner"
                 onKeyPress={(e) => !/[0-9]/.test(e.key) && e.preventDefault()}
               />
               <button
@@ -2018,20 +2260,54 @@ const SettingsPage = ({ totalCapital, onUpdateCapital, loading, formatCurrency, 
                   if (val.length === 4) onUpdatePin(val);
                   else Swal.fire('Error', 'El PIN debe ser de 4 dígitos', 'error');
                 }}
-                className="bg-slate-900 text-white px-6 rounded-2xl font-black uppercase text-xs hover:bg-slate-800 transition-all active:scale-95 shadow-lg"
+                className="w-full xs:w-auto bg-slate-900 text-white px-8 py-4 xs:py-0 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-lg whitespace-nowrap"
               >
                 Cambiar
               </button>
             </div>
           </div>
 
+          {/* Botón Bloquear: Ajustado el tamaño de fuente y padding */}
           <button
             onClick={onLogout}
-            className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 transition-all active:scale-95"
+            className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 transition-all active:scale-95"
           >
             <X size={16} strokeWidth={3} /> Bloquear Aplicación
           </button>
         </div>
+      </div>
+
+      {/* Sección de Notificaciones en SettingsPage */}
+      <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-100 p-6 sm:p-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-blue-100 rounded-xl">
+            <Bell className="text-blue-600" size={20} /> {/* Asegúrate de haberlo importado arriba */}
+          </div>
+          <h3 className="text-base font-black text-slate-800 uppercase italic">Notificaciones</h3>
+        </div>
+
+        <button
+          onClick={async () => {
+            // Si usas Capacitor para Android:
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+              await programarAlertaManana();
+              Swal.fire({
+                title: '¡Activado!',
+                text: 'Recibirás alertas de cobro en este dispositivo',
+                icon: 'success',
+                confirmButtonColor: '#2563eb'
+              });
+            }
+          }}
+          className="w-full py-4 bg-blue-50 text-blue-600 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100 transition-all active:scale-95"
+        >
+          <Bell size={16} strokeWidth={3} /> Activar Alertas de Cobro
+        </button>
+
+        <p className="mt-4 text-[9px] text-slate-400 font-bold uppercase text-center tracking-tighter">
+          La app te avisará cada mañana si tienes clientes programados para hoy.
+        </p>
       </div>
 
       <div className="text-center pt-4 opacity-50">
@@ -2106,6 +2382,27 @@ const LoginScreen = ({ pin, setPin, onVerify }) => {
       </div>
     </div>
   );
+};
+
+const sendNotification = (mensaje) => {
+  if (!("Notification" in window)) {
+    console.log("Este navegador no soporta notificaciones de escritorio");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    new Notification("🔔 APEX", {
+      body: mensaje,
+      icon: "/logo192.png",
+    });
+  }
+  else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then((permission) => {
+      if (permission === "granted") {
+        sendNotification(mensaje);
+      }
+    });
+  }
 };
 
 export default LoanAdminApp;
