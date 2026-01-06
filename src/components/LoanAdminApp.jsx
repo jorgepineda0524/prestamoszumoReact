@@ -168,6 +168,7 @@ const LoanAdminApp = () => {
         .select(`
         *,
         clientes (nombre),
+        pagos (*),
         registro_comisiones (
           monto_comision,
           porcentaje_aplicado,
@@ -1915,6 +1916,85 @@ const LoanAdminApp = () => {
                       </div>
                     </div>
 
+                    {/* --- SECCIÓN DE PLAN DE PAGOS PROYECTADO --- */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 px-2">
+                        <Receipt size={18} className="text-slate-400" />
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Plan de Pagos y Estado</h3>
+                      </div>
+                      
+                      <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Cuota</th>
+                              <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Fecha Límite</th>
+                              <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Estado</th>
+                              <th className="p-4 text-[9px] font-black text-slate-400 uppercase text-right">Monto</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {(() => {
+                              const cuotas = [];
+                              const numSemanas = selectedLoan.plazo_dias / 7;
+                              const valorCuota = selectedLoan.total_a_pagar / numSemanas;
+                              const fechaInicio = new Date(selectedLoan.fecha_prestamo + 'T00:00:00');
+                              const hoy = new Date();
+                              hoy.setHours(0, 0, 0, 0);
+
+                              // Obtener los montos ya pagados de la base de datos
+                              const totalPagadoReal = selectedLoan.pagos?.reduce((acc, p) => acc + p.monto_pagado, 0) || 0;
+                              let saldoRastreado = totalPagadoReal;
+
+                              for (let i = 1; i <= numSemanas; i++) {
+                                // Calcular fecha de la cuota (sumando 7 días por cada cuota)
+                                const fechaCuota = new Date(fechaInicio);
+                                fechaCuota.setDate(fechaInicio.getDate() + (i * 7));
+
+                                // Determinar si esta cuota ya está cubierta por los pagos realizados
+                                let estado = "";
+                                let colorClase = "";
+                                let bgFila = "";
+
+                                if (saldoRastreado >= valorCuota - 1) { // -1 por posibles decimales
+                                  estado = "PAGADO";
+                                  colorClase = "text-emerald-600";
+                                  bgFila = "bg-emerald-50/20";
+                                  saldoRastreado -= valorCuota;
+                                } else if (fechaCuota < hoy) {
+                                  estado = "VENCIDO";
+                                  colorClase = "text-rose-600";
+                                  bgFila = "bg-rose-50/40";
+                                } else {
+                                  estado = "PENDIENTE";
+                                  colorClase = "text-slate-400";
+                                  bgFila = "";
+                                }
+
+                                cuotas.push(
+                                  <tr key={i} className={`${bgFila} transition-colors`}>
+                                    <td className="p-4 text-[10px] font-black text-slate-400">#{i}</td>
+                                    <td className="p-4 text-xs font-bold text-slate-600">
+                                      {fechaCuota.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                    </td>
+                                    <td className="p-4">
+                                      <span className={`text-[8px] font-black px-2 py-1 rounded-md border ${colorClase} bg-white`}>
+                                        {estado}
+                                      </span>
+                                    </td>
+                                    <td className={`p-4 text-xs font-black text-right ${colorClase}`}>
+                                      {formatCurrency(valorCuota)}
+                                    </td>
+                                  </tr>
+                                );
+                              }
+                              return cuotas;
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                     {/* Botón de Cierre */}
                     <button
                       onClick={() => setSelectedLoan(null)}
@@ -2145,7 +2225,6 @@ const SettingsPage = ({ loans, totalCapital, onUpdateCapital, loading, formatCur
 
   return (
     <div className="p-6 space-y-8 max-w-2xl mx-auto pb-24">
-      {/* Encabezado Principal Apex Style */}
       <div className="flex flex-col items-center mb-4">
         <div className="flex items-center gap-2 mb-2">
           <Sparkles size={18} className="text-blue-500 animate-pulse" />
