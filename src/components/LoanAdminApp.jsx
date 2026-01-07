@@ -2080,13 +2080,15 @@ const LoanAdminApp = () => {
       ) : (
         /* 2. SI ESTÁ AUTENTICADO, RENDERIZA TODO LO DEMÁS */
         <>
-          <div className="max-w-7xl mx-auto pb-20">
+          <div className="max-w-7xl mx-auto pb-32">
             {renderContent()}
           </div>
-
-          <nav className="fixed bottom-0 left-0 right-0 z-[120] bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe">
+          <nav className="fixed bottom-0 left-0 right-0 z-[120] bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+            style={{ 
+              paddingBottom: 'env(safe-area-inset-bottom, 12px)' 
+            }}
+          >
             <div className="max-w-md mx-auto flex justify-around items-center h-20 px-2 relative">
-
               {[
                 { id: 'home', icon: Home, label: 'Inicio', color: 'text-blue-600', bg: 'bg-blue-50' },
                 { id: 'clients', icon: Users, label: 'Usuarios', color: 'text-indigo-600', bg: 'bg-indigo-50' },
@@ -2103,11 +2105,9 @@ const LoanAdminApp = () => {
                     onClick={() => setActiveTab(tab.id)}
                     className="relative flex flex-col items-center justify-center flex-1 h-full transition-all duration-300"
                   >
-                    {/* Bloque de Fondo Activo */}
                     <div className={`absolute inset-y-2 inset-x-1 rounded-2xl transition-all duration-300 ${IsActive ? `${tab.bg} opacity-100 scale-100` : 'bg-transparent opacity-0 scale-95'
                       }`} />
 
-                    {/* Contenedor de Icono y Texto */}
                     <div className={`relative z-10 flex flex-col items-center gap-1 transition-transform duration-300 ${IsActive ? 'scale-105' : 'scale-100'
                       }`}>
                       <IconComponent
